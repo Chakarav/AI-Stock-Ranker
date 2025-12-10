@@ -8,3 +8,4 @@ xgboost
 niftystocks
 requests
 lxml
+matplotlib
