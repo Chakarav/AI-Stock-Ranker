@@ -8,9 +8,9 @@ from email.mime.text import MIMEText
 st.set_page_config(page_title="AlphaQuant Dashboard", layout="wide")
 
 # Custom CSS for Professional Look
+# Custom CSS (Updated to work in Dark Mode)
 st.markdown("""
 <style>
-    .stMetric { background-color: #f0f2f6; padding: 10px; border-radius: 5px; }
     div[data-testid="stSidebarUserContent"] { padding-top: 2rem; }
     .success-msg { color: #4caf50; font-weight: bold; }
 </style>
@@ -121,4 +121,5 @@ if not df.empty:
     else:
         st.error(f"Data loaded, but '{score_col}' column is missing. Check CSV.")
 else:
+
     st.info(f"⏳ Waiting for data... The robot runs daily at 8:00 AM.")
