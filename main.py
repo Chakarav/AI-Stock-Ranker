@@ -3,24 +3,32 @@ from config import US_TICKERS, INDIA_TICKERS
 from data_engine import DataEngine
 
 # =================================
-CHOSEN_MARKET = 'IN'  # Change to 'US' when needed
+CHOSEN_MARKET = 'US'
 # =================================
 
 def run_pipeline():
-    # Use top 15 tickers for speed testing (Increase this later)
-    if CHOSEN_MARKET == 'US': tickers = US_TICKERS[:15]
-    else: tickers = INDIA_TICKERS[:15]
+    print(f"--- 🚀 STARTING PIPELINE FOR {CHOSEN_MARKET} ---")
+    
+    # 1. DEFINE TICKERS
+    if CHOSEN_MARKET == 'US':
+        # FALLBACK: If US_TICKERS is empty or fails, use this hardcoded list
+        tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'AMD', 'NFLX', 'INTC']
+        print(f"Using Hardcoded US List: {tickers}")
+    else:
+        tickers = INDIA_TICKERS[:15]
 
+    # 2. RUN ENGINE
     engine = DataEngine(CHOSEN_MARKET)
     df = engine.fetch_data(tickers)
     
+    # 3. SAVE RESULTS
     if not df.empty:
         filename = f"data/{CHOSEN_MARKET}_rankings.csv"
         df.to_csv(filename, index=False)
-        print(f"\nSUCCESS: Data saved to {filename}")
+        print(f"\n✅ SUCCESS: Data saved to {filename}")
         print(df[['Ticker', 'Alpha_Score', 'EV_EBITDA', 'Margins']].head(3))
     else:
-        print("No data found.")
+        print("❌ ERROR: No data found. Frame is empty.")
 
 if __name__ == "__main__":
     run_pipeline()
