@@ -31,7 +31,7 @@ jobs:
 
       # 4. RUN THE ENGINE (Generate New Data)
       - name: Run AI Engine
-        run: python src/main.py
+        run: python main.py
         # If your main.py only does one market, it will just do that one.
         # Ideally, main.py should loop through both, but this works for now.
 
@@ -40,7 +40,7 @@ jobs:
         env:
           # This pulls the password you just saved in Secrets
           EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
-        run: python src/email_bot.py
+        run: python email_bot.py
 
       # 6. SAVE DATA TO GITHUB (So Website Updates)
       - name: Commit & Push New Data
@@ -48,3 +48,4 @@ jobs:
         with:
           commit_message: "Daily Data Update: Auto-generated"
           file_pattern: "data/*.csv"
+
