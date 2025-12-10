@@ -1,0 +1,10 @@
+streamlit
+pandas
+numpy
+plotly
+yfinance
+scikit-learn
+xgboost
+niftystocks
+requests
+lxml
