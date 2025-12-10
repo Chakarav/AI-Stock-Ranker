@@ -27,7 +27,7 @@ jobs:
 
       # 3. INSTALL TOOLS
       - name: Install Dependencies
-        run: pip install pandas yfinance plotly scikit-learn xgboost textblob requests lxml
+        run: pip install pandas yfinance plotly scikit-learn xgboost textblob requests lxml niftystocks
 
       # 4. RUN THE ENGINE (Generate New Data)
       - name: Run AI Engine
@@ -48,4 +48,5 @@ jobs:
         with:
           commit_message: "Daily Data Update: Auto-generated"
           file_pattern: "data/*.csv"
+
 
