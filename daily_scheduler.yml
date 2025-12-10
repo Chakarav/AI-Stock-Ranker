@@ -1,0 +1,50 @@
+name: Daily AlphaQuant Automation
+
+# TRIGGER: When to run?
+on:
+  schedule:
+    # Runs at 02:30 UTC = 08:00 AM India Standard Time
+    - cron: '30 2 * * *'
+  workflow_dispatch: # Allows you to click a button to run it MANUALLY for testing
+
+permissions:
+  contents: write # Permission to update the CSV files in your repo
+
+jobs:
+  run-analytics:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. DOWNLOAD YOUR CODE
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # 2. SETUP PYTHON
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # 3. INSTALL TOOLS
+      - name: Install Dependencies
+        run: pip install pandas yfinance plotly scikit-learn xgboost textblob requests lxml
+
+      # 4. RUN THE ENGINE (Generate New Data)
+      - name: Run AI Engine
+        run: python src/main.py
+        # If your main.py only does one market, it will just do that one.
+        # Ideally, main.py should loop through both, but this works for now.
+
+      # 5. SEND THE EMAIL (Using your Secret Password)
+      - name: Send Newsletter
+        env:
+          # This pulls the password you just saved in Secrets
+          EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
+        run: python src/email_bot.py
+
+      # 6. SAVE DATA TO GITHUB (So Website Updates)
+      - name: Commit & Push New Data
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Daily Data Update: Auto-generated"
+          file_pattern: "data/*.csv"
