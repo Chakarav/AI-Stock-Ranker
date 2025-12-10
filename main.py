@@ -23,7 +23,7 @@ def run_pipeline():
     
     # 3. SAVE RESULTS
     if not df.empty:
-        filename = f"data/{CHOSEN_MARKET}_rankings.csv"
+        filename = f"{CHOSEN_MARKET}_rankings.csv"
         df.to_csv(filename, index=False)
         print(f"\n✅ SUCCESS: Data saved to {filename}")
         print(df[['Ticker', 'Alpha_Score', 'EV_EBITDA', 'Margins']].head(3))
@@ -31,4 +31,5 @@ def run_pipeline():
         print("❌ ERROR: No data found. Frame is empty.")
 
 if __name__ == "__main__":
+
     run_pipeline()
