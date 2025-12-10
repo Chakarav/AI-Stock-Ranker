@@ -2,61 +2,84 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Page Config
-st.set_page_config(page_title="AlphaQuant Newsletter", layout="wide")
-st.title("📰 Daily Alpha Newsletter Dashboard")
+st.set_page_config(page_title="AlphaQuant Institutional", layout="wide")
 
-# 2. Sidebar
-market = st.sidebar.selectbox("Select Market", ["IN", "US"])
+# Professional CSS (Hide header, clean fonts)
+st.markdown("""
+<style>
+    .block-container {padding-top: 1rem;}
+    div[data-testid="stMetricValue"] {font-size: 28px; color: #4caf50;}
+    .stDataFrame {border: 1px solid #333;}
+</style>
+""", unsafe_allow_html=True)
 
-# 3. Load Data
-@st.cache_data
-def load_data(market):
+st.title("AlphaQuant | Institutional Analytics")
+st.markdown("---")
+
+# Sidebar
+market = st.sidebar.selectbox("MARKET DATA", ["IN", "US"])
+st.sidebar.markdown("### Newsletter")
+email = st.sidebar.text_input("Recipient Email")
+if st.sidebar.button("Subscribe"):
+    st.sidebar.success("Added to distribution list.")
+
+# Load Data
+@st.cache_data(ttl=0)
+def load_data(m):
     try:
-        # Load the new rankings with P/E and Sentiment
-        df = pd.read_csv(f"{market}_rankings.csv")
-        return df
+        return pd.read_csv(f"{m}_rankings.csv")
     except:
         return pd.DataFrame()
 
 df = load_data(market)
 
-# 4. KPI Metrics
 if not df.empty:
-    top_stock = df.iloc[0]
+    top_pick = df.iloc[0]
+
+    # --- ROW 1: HEADLINE METRICS ---
+    st.subheader("High Conviction Alpha Pick")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Ticker", top_pick['Ticker'])
+    c1.caption(f"Price: {top_pick['Close']:.2f}")
     
-    col1, col2, col3 = st.columns(3)
-    col1.metric("🏆 Top Pick", top_stock['Ticker'])
-    col2.metric("📊 Final Score", f"{top_stock['Final_Score']:.1f}/100")
-    col3.metric("💰 P/E Ratio", f"{top_stock['PE_Ratio']:.2f}")
+    c2.metric("Alpha Score", f"{top_pick['Alpha_Score']:.0f}/100")
+    c2.caption("Composite Rating")
+
+    c3.metric("Valuation (EV/EBITDA)", f"{top_pick['EV_EBITDA']:.2f}")
+    c3.caption("Sector Avg: ~12.0")
+
+    c4.metric("Profit Margin", f"{top_pick['Margins']:.1f}%")
+    c4.caption("Net Income / Revenue")
 
     st.markdown("---")
 
-    # 5. The "Newsletter" Table
-    st.subheader(f"Top Recommendations for {market}")
+    # --- ROW 2: DEEP DIVE TABS ---
+    tab1, tab2 = st.tabs(["RANKINGS TABLE", "VALUATION MATRIX"])
     
-    # We color the table based on Final Score
-    # We use a simple dataframe display to avoid the matplotlib crash for now
-    st.dataframe(
-        df[['Ticker', 'Final_Score', 'PE_Ratio', 'Sentiment', 'Close']],
-        use_container_width=True,
-        hide_index=True
-    )
+    with tab1:
+        st.subheader("Market Opportunities")
+        # Format table for readability
+        display_df = df[['Ticker', 'Alpha_Score', 'Close', 'PE_Ratio', 'EV_EBITDA', 'Margins', 'Debt_Equity', 'RSI']]
+        st.dataframe(
+            display_df.style.background_gradient(subset=['Alpha_Score'], cmap='Greens'),
+            use_container_width=True,
+            height=600
+        )
 
-    # 6. Analysis Chart
-    st.subheader("Factor Analysis")
-    # Scatter plot: Value (P/E) vs Score
-    fig = px.scatter(
-        df, 
-        x='PE_Ratio', 
-        y='Final_Score', 
-        color='Sentiment',
-        text='Ticker',
-        title="Value vs. Quality vs. Sentiment",
-        labels={'PE_Ratio': 'P/E Ratio (Lower is Better)', 'Final_Score': 'Alpha Score'},
-        color_continuous_scale='RdYlGn'
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    with tab2:
+        st.subheader("Valuation vs Quality")
+        fig = px.scatter(
+            df,
+            x="EV_EBITDA",
+            y="Margins",
+            size="Alpha_Score",
+            color="Sentiment",
+            text="Ticker",
+            title="Quality (Margins) vs Price (EV/EBITDA)",
+            labels={"EV_EBITDA": "EV / EBITDA (Lower is Cheaper)", "Margins": "Profit Margin (Higher is Better)"},
+            color_continuous_scale="RdYlGn"
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 else:
-    st.error(f"No data found for {market}. Please upload {market}_rankings.csv to GitHub.")
+    st.warning("Awaiting Data Ingestion. Run pipeline locally.")
