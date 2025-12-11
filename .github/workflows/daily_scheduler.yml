@@ -4,8 +4,8 @@ name: Daily AlphaQuant Automation
 on:
   schedule:
     # Runs at 02:30 UTC = 08:00 AM India Standard Time
-    - cron: '30 2 * * *'
-  workflow_dispatch: # Allows you to click a button to run it MANUALLY for testing
+    cron: '45 2 * * *' 
+    workflow_dispatch: # Allows you to click a button to run it MANUALLY for testing
 
 permissions:
   contents: write # Permission to update the CSV files in your repo
@@ -48,5 +48,6 @@ jobs:
         with:
           commit_message: "Daily Data Update: Auto-generated"
           file_pattern: "data/*.csv"
+
 
 
