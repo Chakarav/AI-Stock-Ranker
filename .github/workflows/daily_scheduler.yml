@@ -3,9 +3,9 @@ name: Daily AlphaQuant Automation
 # TRIGGER: When to run?
 on:
   schedule:
-    # Runs at 02:30 UTC = 08:00 AM India Standard Time
-    cron: '45 2 * * *' 
-    workflow_dispatch: # Allows you to click a button to run it MANUALLY for testing
+    # Runs at 02:45 UTC = 08:15 AM India Standard Time
+    - cron: '45 2 * * *'  # <--- FIXED: Added the dash "-" here
+  workflow_dispatch:      # <--- FIXED: Indentation (Moved left to align with 'schedule')
 
 permissions:
   contents: write # Permission to update the CSV files in your repo
@@ -32,13 +32,10 @@ jobs:
       # 4. RUN THE ENGINE (Generate New Data)
       - name: Run AI Engine
         run: python main.py
-        # If your main.py only does one market, it will just do that one.
-        # Ideally, main.py should loop through both, but this works for now.
 
       # 5. SEND THE EMAIL (Using your Secret Password)
       - name: Send Newsletter
         env:
-          # This pulls the password you just saved in Secrets
           EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
         run: python email_bot.py
 
@@ -47,7 +44,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: "Daily Data Update: Auto-generated"
-          file_pattern: "data/*.csv"
+          file_pattern: "*.csv"  # <--- FIXED: Changed from "data/*.csv" to "*.csv" (Root folder)
 
 
 
