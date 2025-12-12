@@ -1,35 +1,54 @@
-# src/main.py
-from config import US_TICKERS, INDIA_TICKERS
-from data_engine import DataEngine
+import yfinance as yf
+import pandas as pd
+import time
 
-# =================================
-CHOSEN_MARKET = 'US'
-# =================================
-
-def run_pipeline():
-    print(f"--- 🚀 STARTING PIPELINE FOR {CHOSEN_MARKET} ---")
+def get_stock_data(tickers):
+    """
+    Robust download function that handles:
+    1. YFTzMissingError (Timezone crash)
+    2. Multi-Index Columns (New yfinance format)
+    3. Empty Data (Network fails)
+    """
+    print(f"📥 Downloading data for {len(tickers)} stocks...")
     
-    # 1. DEFINE TICKERS
-    if CHOSEN_MARKET == 'US':
-        # FALLBACK: If US_TICKERS is empty or fails, use this hardcoded list
-        tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'AMD', 'NFLX', 'INTC']
-        print(f"Using Hardcoded US List: {tickers}")
-    else:
-        tickers = INDIA_TICKERS[:15]
-
-    # 2. RUN ENGINE
-    engine = DataEngine(CHOSEN_MARKET)
-    df = engine.fetch_data(tickers)
+    data = pd.DataFrame()
     
-    # 3. SAVE RESULTS
-    if not df.empty:
-        filename = f"{CHOSEN_MARKET}_rankings.csv"
-        df.to_csv(filename, index=False)
-        print(f"\n✅ SUCCESS: Data saved to {filename}")
-        print(df[['Ticker', 'Alpha_Score', 'EV_EBITDA', 'Margins']].head(3))
-    else:
-        print("❌ ERROR: No data found. Frame is empty.")
+    # RETRY LOGIC: Try 3 times if Yahoo blocks us
+    for attempt in range(3):
+        try:
+            # auto_adjust=False fixes some data alignment bugs
+            data = yf.download(tickers, period="1y", interval="1d", auto_adjust=False, progress=False)
+            
+            if not data.empty:
+                break
+            else:
+                print(f"   ⚠️ Attempt {attempt+1}: Downloaded empty data. Retrying...")
+                time.sleep(2)
+        except Exception as e:
+            print(f"   ⚠️ Attempt {attempt+1} Failed: {e}")
+            time.sleep(2)
+    
+    # CRITICAL CHECK: Did we actually get data?
+    if data.empty:
+        print("❌ CRITICAL ERROR: All download attempts failed. Using old data if available.")
+        return None
 
-if __name__ == "__main__":
+    # FIX: Handle Multi-Index (Recent yfinance update changed columns to (Price, Ticker))
+    # We only want 'Adj Close' or 'Close'
+    try:
+        if 'Adj Close' in data.columns:
+            data = data['Adj Close']
+        elif 'Close' in data.columns:
+            data = data['Close']
+        else:
+            # Fallback for weird formats
+            data = data.xs('Close', level=0, axis=1, drop_level=False)
+    except Exception as e:
+        print(f"   ⚠️ Column cleanup warning: {e}")
+        
+    # Drop tickers that failed completely (all NaNs)
+    data = data.dropna(axis=1, how='all')
+    
+    print(f"✅ Successfully loaded data for {len(data.columns)} tickers.")
+    return data
 
-    run_pipeline()
