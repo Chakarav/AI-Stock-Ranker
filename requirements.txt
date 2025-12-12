@@ -1,11 +1,11 @@
-streamlit
+yfinance>=0.2.54
 pandas
-numpy
 plotly
-yfinance
 scikit-learn
 xgboost
-niftystocks
+textblob
 requests
 lxml
-matplotlib
+niftystocks
+gspread
+oauth2client
