@@ -1,52 +1,40 @@
 name: Daily AlphaQuant Automation
 
-# TRIGGER: When to run?
 on:
   schedule:
-    # Runs at 04:05 UTC = 09:35 AM IST (Safe zone for delayed data)
-    - cron: '5 4 * * *'  # <--- FIXED: Added the dash "-" here
-  workflow_dispatch:      # <--- FIXED: Indentation (Moved left to align with 'schedule')
+    # Runs at 9:35 AM IST (04:05 UTC)
+    - cron: '5 4 * * *'
+  workflow_dispatch:
 
 permissions:
-  contents: write # Permission to update the CSV files in your repo
+  contents: write
 
 jobs:
   run-analytics:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. DOWNLOAD YOUR CODE
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2. SETUP PYTHON
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      # 3. INSTALL TOOLS
+      # FIX: Install from the file, don't hardcode list!
       - name: Install Dependencies
-        run: pip install pandas yfinance plotly scikit-learn xgboost textblob requests lxml niftystocks
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-      # 4. RUN THE ENGINE (Generate New Data)
       - name: Run AI Engine
         run: python main.py
 
-      # 5. SEND THE EMAIL (Using your Secret Password)
-      - name: Send Newsletter
-        env:
-          EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
-        run: python email_bot.py
-
-      # 6. SAVE DATA TO GITHUB (So Website Updates)
       - name: Commit & Push New Data
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: "Daily Data Update: Auto-generated"
-          file_pattern: "*.csv"  # <--- FIXED: Changed from "data/*.csv" to "*.csv" (Root folder)
-
-
-
+          file_pattern: "*.csv"
 
 
