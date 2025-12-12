@@ -30,7 +30,7 @@ jobs:
       - name: Run AI Engine
         run: python main.py
 
-      # 2. SEND EMAIL (This step was missing in your last run!)
+      # 2. SEND EMAIL (The Missing Step)
       - name: Send Newsletter
         env:
           EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
