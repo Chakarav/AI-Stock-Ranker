@@ -2,7 +2,6 @@ name: Daily AlphaQuant Automation
 
 on:
   schedule:
-    # Runs at 9:35 AM IST (04:05 UTC)
     - cron: '5 4 * * *'
   workflow_dispatch:
 
@@ -22,7 +21,6 @@ jobs:
         with:
           python-version: '3.9'
 
-      # Install exact dependencies
       - name: Install Dependencies
         run: |
           pip install --upgrade pip
@@ -32,13 +30,9 @@ jobs:
       - name: Run AI Engine
         run: python main.py
 
-      # 2. SEND EMAIL (This was missing!)
-      - name: Send Newsletter
-        env:
-          EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
-        run: python email_bot.py
+      # (EMAIL STEP REMOVED TEMPORARILY TO PREVENT CRASH)
 
-      # 3. SAVE DATA
+      # 2. SAVE DATA
       - name: Commit & Push New Data
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
