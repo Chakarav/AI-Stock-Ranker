@@ -3,8 +3,8 @@ name: Daily AlphaQuant Automation
 # TRIGGER: When to run?
 on:
   schedule:
-    # Runs at 02:45 UTC = 08:15 AM India Standard Time
-    - cron: '45 2 * * *'  # <--- FIXED: Added the dash "-" here
+    # Runs at 03:47 UTC = 09:17 AM IST (Avoiding the 9:15 traffic jam)
+    - cron: '47 3 * * *'  # <--- FIXED: Added the dash "-" here
   workflow_dispatch:      # <--- FIXED: Indentation (Moved left to align with 'schedule')
 
 permissions:
@@ -45,6 +45,7 @@ jobs:
         with:
           commit_message: "Daily Data Update: Auto-generated"
           file_pattern: "*.csv"  # <--- FIXED: Changed from "data/*.csv" to "*.csv" (Root folder)
+
 
 
 
