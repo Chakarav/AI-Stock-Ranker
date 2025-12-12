@@ -1,0 +1,46 @@
+name: Daily AlphaQuant Automation
+
+on:
+  schedule:
+    # Runs at 9:35 AM IST (04:05 UTC)
+    - cron: '5 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-analytics:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # Install exact dependencies
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 1. GENERATE DATA
+      - name: Run AI Engine
+        run: python main.py
+
+      # 2. SEND EMAIL (This was missing!)
+      - name: Send Newsletter
+        env:
+          EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
+        run: python email_bot.py
+
+      # 3. SAVE DATA
+      - name: Commit & Push New Data
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Daily Data Update: Auto-generated"
+          file_pattern: "*.csv"
