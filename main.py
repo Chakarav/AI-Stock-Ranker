@@ -5,18 +5,19 @@ from niftystocks import ns
 from datetime import datetime
 
 # ==========================================
-# 1. LIVE PRICE FETCHER
+# 1. LIVE PRICE FETCHER (With Fallback)
 # ==========================================
 def get_live_price(ticker):
+    """
+    1. Tries to get LIVE price (1000).
+    2. If blocked, returns None (so we can handle it gracefully).
+    """
     try:
         stock = yf.Ticker(ticker)
         # Try 'currentPrice'
         if 'currentPrice' in stock.info and stock.info['currentPrice']:
             return float(stock.info['currentPrice'])
-        # Try 'regularMarketPrice'
-        if 'regularMarketPrice' in stock.info and stock.info['regularMarketPrice']:
-            return float(stock.info['regularMarketPrice'])
-        # Fallback to Fast Info
+        # Try Fast Info
         return float(stock.fast_info['last_price'])
     except:
         return None
@@ -54,22 +55,32 @@ def calculate_rsi(series, period=14):
     return 100 - (100 / (1 + rs))
 
 def analyze_market(tickers, market_name):
-    print(f"\n⚙️ Running LIVE Analysis for {market_name}...")
+    print(f"\n⚙️ Running Analysis for {market_name}...")
     history_df = get_history_batch(tickers)
     results = []
     
-    # --- FORCE UPDATE TIMESTAMP ---
-    # This string changes every time you run it (e.g., "2025-12-12 16:30:05")
-    # Git detects this change and FORCES the update.
+    # TIMESTAMP TO PROVE IT UPDATED
     run_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    print(f"   ⚡ Fetching prices...")
+    print(f"   ⚡ Fetching prices (Fail-Safe Mode)...")
     
     for ticker in tickers:
         try:
+            # 1. Get Price
             live_price = get_live_price(ticker)
-            if live_price is None: continue
+            is_live = True
+            
+            # FALLBACK LOGIC (The Fix)
+            if live_price is None:
+                # If Live Fetch failed, use yesterday's close from history
+                # This ensures we ALWAYS have a number.
+                if ticker in history_df.columns:
+                    live_price = history_df[ticker].iloc[-1]
+                    is_live = False
+                else:
+                    continue # Skip only if we have NO data at all
 
+            # 2. Indicators
             if ticker in history_df.columns:
                 hist_series = history_df[ticker].dropna()
                 if len(hist_series) < 50: continue
@@ -92,20 +103,23 @@ def analyze_market(tickers, market_name):
                     'Alpha_Score': int(score),
                     'RSI': round(rsi, 2),
                     'SMA_50': round(sma_50, 2),
-                    'Last_Updated': run_timestamp  # <--- THIS IS THE FIX
+                    'Data_Source': "LIVE" if is_live else "DELAYED",
+                    'Last_Updated': run_timestamp
                 })
         except:
             continue
 
+    # ALWAYS SAVE (Even if results are imperfect)
     df_results = pd.DataFrame(results)
     if not df_results.empty:
         df_results = df_results.sort_values(by='Alpha_Score', ascending=False)
         filename = f"{market_name}_rankings.csv"
         df_results.to_csv(filename, index=False)
+        
         top = df_results.iloc[0]
-        print(f"✅ Saved {market_name}. Top: {top['Ticker']} (Updated: {top['Last_Updated']})")
+        print(f"✅ Saved {market_name}. Top: {top['Ticker']} (Source: {top['Data_Source']})")
     else:
-        print(f"❌ No results for {market_name}")
+        print(f"❌ CRITICAL: No results generated at all.")
 
 if __name__ == "__main__":
     print("🚀 AlphaQuant Engine Starting...")
