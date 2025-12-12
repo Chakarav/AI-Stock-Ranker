@@ -3,31 +3,30 @@ import pandas as pd
 import requests
 from niftystocks import ns
 from datetime import datetime
+import pytz # timezone
 
 # ==========================================
-# 1. LIVE PRICE FETCHER (The "Info" Method)
+# 1. LIVE PRICE FETCHER (Aggressive Mode)
 # ==========================================
 def get_live_price(ticker):
     """
-    Fetches live price using yfinance .info['currentPrice'].
-    This endpoint works better on US Servers (GitHub) than NSE scraping.
+    Tries multiple fields to find a price that ISN'T yesterday's close.
     """
     try:
         stock = yf.Ticker(ticker)
         
-        # Method A: Try the 'currentPrice' field (Most accurate)
+        # 1. Try 'currentPrice'
         if 'currentPrice' in stock.info and stock.info['currentPrice'] is not None:
             return float(stock.info['currentPrice'])
             
-        # Method B: Try 'regularMarketPrice'
-        if 'regularMarketPrice' in stock.info and stock.info['regularMarketPrice'] is not None:
-            return float(stock.info['regularMarketPrice'])
+        # 2. Try 'dayHigh' (Often updates even if currentPrice is stuck)
+        if 'dayHigh' in stock.info and stock.info['dayHigh'] is not None:
+            return float(stock.info['dayHigh'])
             
-        # Method C: Fast Info (Backup)
+        # 3. Fallback
         return float(stock.fast_info['last_price'])
 
-    except Exception as e:
-        # print(f"   ⚠️ Could not fetch live price for {ticker}: {e}")
+    except:
         return None
 
 # ==========================================
@@ -36,26 +35,19 @@ def get_live_price(ticker):
 def get_nifty_tickers():
     print("🔄 Fetching Nifty 50 tickers...")
     try:
-        # Try to fetch dynamic list
         tickers = ns.get_nifty50()
         tickers = [t + '.NS' for t in tickers]
         return tickers
     except:
-        # Fallback list if NSE blocks the list fetch
-        return [
-            'RELIANCE.NS', 'HDFCBANK.NS', 'INFY.NS', 'TCS.NS', 'ICICIBANK.NS',
-            'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'LICI.NS', 'HINDUNILVR.NS',
-            'TATAMOTORS.NS', 'LT.NS', 'BAJFINANCE.NS', 'HCLTECH.NS', 'MARUTI.NS',
-            'SUNPHARMA.NS', 'TITAN.NS', 'M&M.NS', 'ULTRACEMCO.NS', 'ASIANPAINT.NS'
-        ]
+        return ['RELIANCE.NS', 'HDFCBANK.NS', 'INFY.NS', 'TCS.NS']
 
 # ==========================================
 # 3. ANALYSIS ENGINE
 # ==========================================
 def get_history_batch(tickers):
-    print(f"\n📥 Downloading historical context (Yahoo)...")
+    # Only for RSI/SMA history
+    print(f"\n📥 Downloading historical context...")
     try:
-        # History is ONLY for math (RSI/SMA), not for the displayed price.
         data = yf.download(tickers, period="1y", interval="1d", auto_adjust=False, progress=False)
         if 'Adj Close' in data.columns: return data['Adj Close']
         elif 'Close' in data.columns: return data['Close']
@@ -75,19 +67,17 @@ def analyze_market(tickers, market_name):
     history_df = get_history_batch(tickers)
     results = []
     
-    print(f"   ⚡ Fetching REAL-TIME prices (Strict Mode)...")
+    # Get Current India Time for the Timestamp
+    ist = pytz.timezone('Asia/Kolkata')
+    current_time = datetime.now(ist).strftime('%Y-%m-%d %H:%M:%S')
+    
+    print(f"   ⚡ Fetching prices...")
     
     for ticker in tickers:
         try:
-            # 1. Get Live Price
             live_price = get_live_price(ticker)
-            
-            # STRICT MODE: If live price fails, SKIP THE STOCK.
-            # Do NOT fallback to old history. This prevents the "989" error.
-            if live_price is None:
-                continue
+            if live_price is None: continue
 
-            # 2. Indicators (From History)
             if ticker in history_df.columns:
                 hist_series = history_df[ticker].dropna()
                 if len(hist_series) < 50: continue
@@ -101,30 +91,29 @@ def analyze_market(tickers, market_name):
                 if sma_50 > sma_200: score += 10
                 if 30 < rsi < 50: score += 20    
                 elif rsi > 70: score -= 20       
-                elif rsi < 30: score += 10       
                 
                 score = min(100, max(0, score))
                 
                 results.append({
                     'Ticker': ticker,
-                    'Close': round(live_price, 2), # THIS MUST BE LIVE
+                    'Close': round(live_price, 2),
                     'Alpha_Score': int(score),
                     'RSI': round(rsi, 2),
-                    'SMA_50': round(sma_50, 2)
+                    'SMA_50': round(sma_50, 2),
+                    'Last_Updated': current_time  # <--- THIS FORCES THE UPDATE
                 })
         except:
             continue
 
-    # Save
     df_results = pd.DataFrame(results)
     if not df_results.empty:
         df_results = df_results.sort_values(by='Alpha_Score', ascending=False)
         filename = f"{market_name}_rankings.csv"
         df_results.to_csv(filename, index=False)
         
-        # VERIFICATION PRINT
+        # Verify Print
         top = df_results.iloc[0]
-        print(f"✅ Saved {market_name}. Top Pick: {top['Ticker']} @ {top['Close']}")
+        print(f"✅ Saved {market_name}. Top: {top['Ticker']} @ {top['Close']} (Time: {top['Last_Updated']})")
     else:
         print(f"❌ No results for {market_name}")
 
