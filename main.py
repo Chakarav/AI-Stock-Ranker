@@ -1,52 +1,31 @@
 import yfinance as yf
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 from niftystocks import ns
 from datetime import datetime
-import time
-import random
 
 # ==========================================
-# 1. LIVE PRICE FETCHER (MarketWatch Source)
+# 1. LIVE PRICE FETCHER (NSE OFFICIAL API)
 # ==========================================
-def get_marketwatch_price(ticker):
+def get_live_price(ticker):
     """
-    Scrapes the price from MarketWatch to bypass Yahoo/Google cache.
+    Fetches REAL-TIME price directly from NSE India API.
+    Bypasses Google/Yahoo/MarketWatch blocks to fix the 989 vs 1000 issue.
     """
     try:
-        # 1. Clean Ticker: 'HDFCBANK.NS' -> 'hdfcbank'
-        symbol = ticker.split('.')[0].lower()
+        # Convert 'HDFCBANK.NS' -> 'HDFCBANK'
+        clean_ticker = ticker.replace('.NS', '')
         
-        # 2. Construct URL
-        url = f"https://www.marketwatch.com/investing/stock/{symbol}?countrycode=in"
+        # Get Quote from NSE
+        quote = ns.get_quote(clean_ticker)
         
-        # 3. Rotate Headers to look like a Human
-        user_agents = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0"
-        ]
-        headers = {"User-Agent": random.choice(user_agents)}
-        
-        response = requests.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(response.text, 'lxml')
-        
-        # 4. Find the Price (MarketWatch uses <bg-quote class="value">)
-        price_tag = soup.find('bg-quote', class_='value')
-        
-        if price_tag:
-            price_text = price_tag.text.replace(",", "")
-            return float(price_text)
+        # Extract Price
+        if quote and 'lastPrice' in quote:
+            price = float(quote['lastPrice'])
+            return price
         else:
-            # Fallback for some pages that use a different class
-            meta_price = soup.find('meta', {'name': 'price'})
-            if meta_price:
-                return float(meta_price['content'].replace(",", ""))
-                
-        return None
-    except Exception as e:
-        # print(f"   ⚠️ MW scrape error for {ticker}: {e}")
+            return None
+    except:
         return None
 
 # ==========================================
@@ -65,10 +44,12 @@ def get_nifty_tickers():
 # 3. ANALYSIS ENGINE
 # ==========================================
 def get_history_batch(tickers):
-    print(f"\n📥 Downloading historical context (Yahoo)...")
+    # Only for RSI/SMA history (Yahoo is fine for this)
+    print(f"\n📥 Downloading historical context...")
+    session = requests.Session()
+    session.headers.update({"User-Agent": "Mozilla/5.0"})
     try:
-        # We only use Yahoo for the SMA/RSI math, so 1-day lag is acceptable here
-        data = yf.download(tickers, period="1y", interval="1d", auto_adjust=False, progress=False)
+        data = yf.download(tickers, period="1y", interval="1d", auto_adjust=False, progress=False, session=session)
         if 'Adj Close' in data.columns: return data['Adj Close']
         elif 'Close' in data.columns: return data['Close']
         else: return data.xs('Close', level=0, axis=1, drop_level=False)
@@ -84,26 +65,24 @@ def calculate_rsi(series, period=14):
 
 def analyze_market(tickers, market_name):
     print(f"\n⚙️ Running LIVE Analysis for {market_name}...")
-    
-    # 1. Get History (for Math)
     history_df = get_history_batch(tickers)
     results = []
     
-    print(f"   ⚡ Fetching REAL-TIME prices from MarketWatch...")
+    print(f"   ⚡ Fetching REAL-TIME prices from NSE API...")
     
     for ticker in tickers:
         try:
-            # A. Get Live Price (MarketWatch)
-            live_price = get_marketwatch_price(ticker)
+            # 1. Get Live Price (NSE API)
+            live_price = get_live_price(ticker)
             
-            # Sanity Check: If MarketWatch failed, try Yahoo History
+            # If NSE fails, try Yahoo History as last resort
             if live_price is None:
                 if ticker in history_df.columns:
                     live_price = history_df[ticker].iloc[-1]
                 else:
                     continue
 
-            # B. Indicators (From History)
+            # 2. Indicators (From History)
             if ticker in history_df.columns:
                 hist_series = history_df[ticker].dropna()
                 if len(hist_series) < 50: continue
@@ -132,14 +111,11 @@ def analyze_market(tickers, market_name):
         except:
             continue
 
-    # Save
     df_results = pd.DataFrame(results)
     if not df_results.empty:
         df_results = df_results.sort_values(by='Alpha_Score', ascending=False)
         filename = f"{market_name}_rankings.csv"
         df_results.to_csv(filename, index=False)
-        
-        # VERIFICATION PRINT
         top = df_results.iloc[0]
         print(f"✅ Saved {market_name}. Top Pick: {top['Ticker']} @ {top['Close']}")
     else:
@@ -150,4 +126,3 @@ if __name__ == "__main__":
     tickers_in = get_nifty_tickers()
     analyze_market(tickers_in, "IN")
     print("\n✅ All Tasks Completed.")
-
