@@ -1,35 +1,31 @@
 import smtplib
 import os
 from email.mime.text import MIMEText
+import socket
 
 # 1. SETUP
 SENDER = "vishwajeetchakaravarthi@gmail.com"
 RECEIVER = "vishwajeetchakaravarthi@gmail.com"
-PASSWORD = os.environ.get("EMAIL_PASSWORD") # We will check if this is finding the secret
+PASSWORD = os.environ.get("EMAIL_PASSWORD")
 
-print("🔍 DEBUG MODE: Started.")
+print("🔍 DEBUG MODE: Port 465 SSL Test")
 
-# 2. CHECK PASSWORD
 if not PASSWORD:
-    print("❌ FATAL ERROR: The robot cannot find your 'EMAIL_PASSWORD' secret.")
-    print("   Fix: Go to Settings -> Secrets. make sure the name is EXACTLY 'APP_PASSWORD' or 'EMAIL_PASSWORD'.")
+    print("❌ FATAL: Secret 'EMAIL_PASSWORD' is missing.")
     exit(1)
-else:
-    print(f"✅ Password found (Length: {len(PASSWORD)} chars).")
 
-# 3. TRY TO CONNECT
 try:
-    print(f"   Connecting to Gmail...")
-    server = smtplib.SMTP("smtp.gmail.com", 587)
-    server.starttls()
+    print("   1. Connecting to Gmail (Port 465)...")
+    # FIX: Use SMTP_SSL directly (Port 465) instead of .starttls()
+    # FIX: Added timeout=30 so it doesn't hang for an hour
+    server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30)
     
-    print(f"   Logging in as {SENDER}...")
+    print(f"   2. Logging in as {SENDER}...")
     server.login(SENDER, PASSWORD)
     print("   ✅ Login Successful!")
     
-    # 4. SEND TEST EMAIL
-    msg = MIMEText("If you are reading this, the pipeline is PERFECT. The issue was just the CSV file path.")
-    msg["Subject"] = "🚨 TEST: The Robot is Alive"
+    msg = MIMEText("If you see this, Port 465 worked perfectly.")
+    msg["Subject"] = "🚨 TEST: Port 465 Success"
     msg["From"] = SENDER
     msg["To"] = RECEIVER
     
