@@ -35,13 +35,12 @@ def send_email():
         df = pd.read_csv(filename)
         
         # --- THE FIX: DYNAMIC COLUMN SELECTION ---
-        # Instead of hardcoding 'PE_Ratio', we pick useful columns that actually exist.
+        # This logic ensures we ONLY select columns that actually exist.
+        # It prevents the "KeyError: PE_Ratio" crash.
         desired_cols = ['Ticker', 'Close', 'Alpha_Score', 'RSI', 'Data_Source', 'Last_Updated']
-        
-        # Only keep columns that are present in the CSV
         available_cols = [c for c in desired_cols if c in df.columns]
         
-        # detailed_view is the table we send in email
+        # Select top 10 rows with available columns
         top_picks = df[available_cols].head(10)
         
     except Exception as e:
@@ -54,7 +53,7 @@ def send_email():
     msg["From"] = SENDER_EMAIL
     msg["To"] = ", ".join(RECEIVERS)
 
-    # HTML Table with some style
+    # HTML Table
     html_content = f"""
     <html>
       <body style="font-family: Arial, sans-serif;">
@@ -64,8 +63,7 @@ def send_email():
         {top_picks.to_html(index=False, border=1, classes='table', justify='center')}
         
         <p style="margin-top: 20px; font-size: 12px; color: gray;">
-           Data Source: {top_picks.iloc[0]['Data_Source'] if 'Data_Source' in top_picks.columns else 'N/A'} <br>
-           Updated: {top_picks.iloc[0]['Last_Updated'] if 'Last_Updated' in top_picks.columns else 'Unknown'}
+           Automated by AlphaQuant (GitHub Actions)
         </p>
       </body>
     </html>
