@@ -9,3 +9,4 @@ lxml
 niftystocks
 gspread
 oauth2client
+beautifulsoup4
