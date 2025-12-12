@@ -3,29 +3,21 @@ import pandas as pd
 import requests
 from niftystocks import ns
 from datetime import datetime
-import pytz # timezone
 
 # ==========================================
-# 1. LIVE PRICE FETCHER (Aggressive Mode)
+# 1. LIVE PRICE FETCHER
 # ==========================================
 def get_live_price(ticker):
-    """
-    Tries multiple fields to find a price that ISN'T yesterday's close.
-    """
     try:
         stock = yf.Ticker(ticker)
-        
-        # 1. Try 'currentPrice'
-        if 'currentPrice' in stock.info and stock.info['currentPrice'] is not None:
+        # Try 'currentPrice'
+        if 'currentPrice' in stock.info and stock.info['currentPrice']:
             return float(stock.info['currentPrice'])
-            
-        # 2. Try 'dayHigh' (Often updates even if currentPrice is stuck)
-        if 'dayHigh' in stock.info and stock.info['dayHigh'] is not None:
-            return float(stock.info['dayHigh'])
-            
-        # 3. Fallback
+        # Try 'regularMarketPrice'
+        if 'regularMarketPrice' in stock.info and stock.info['regularMarketPrice']:
+            return float(stock.info['regularMarketPrice'])
+        # Fallback to Fast Info
         return float(stock.fast_info['last_price'])
-
     except:
         return None
 
@@ -45,7 +37,6 @@ def get_nifty_tickers():
 # 3. ANALYSIS ENGINE
 # ==========================================
 def get_history_batch(tickers):
-    # Only for RSI/SMA history
     print(f"\n📥 Downloading historical context...")
     try:
         data = yf.download(tickers, period="1y", interval="1d", auto_adjust=False, progress=False)
@@ -67,9 +58,10 @@ def analyze_market(tickers, market_name):
     history_df = get_history_batch(tickers)
     results = []
     
-    # Get Current India Time for the Timestamp
-    ist = pytz.timezone('Asia/Kolkata')
-    current_time = datetime.now(ist).strftime('%Y-%m-%d %H:%M:%S')
+    # --- FORCE UPDATE TIMESTAMP ---
+    # This string changes every time you run it (e.g., "2025-12-12 16:30:05")
+    # Git detects this change and FORCES the update.
+    run_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     print(f"   ⚡ Fetching prices...")
     
@@ -100,7 +92,7 @@ def analyze_market(tickers, market_name):
                     'Alpha_Score': int(score),
                     'RSI': round(rsi, 2),
                     'SMA_50': round(sma_50, 2),
-                    'Last_Updated': current_time  # <--- THIS FORCES THE UPDATE
+                    'Last_Updated': run_timestamp  # <--- THIS IS THE FIX
                 })
         except:
             continue
@@ -110,10 +102,8 @@ def analyze_market(tickers, market_name):
         df_results = df_results.sort_values(by='Alpha_Score', ascending=False)
         filename = f"{market_name}_rankings.csv"
         df_results.to_csv(filename, index=False)
-        
-        # Verify Print
         top = df_results.iloc[0]
-        print(f"✅ Saved {market_name}. Top: {top['Ticker']} @ {top['Close']} (Time: {top['Last_Updated']})")
+        print(f"✅ Saved {market_name}. Top: {top['Ticker']} (Updated: {top['Last_Updated']})")
     else:
         print(f"❌ No results for {market_name}")
 
