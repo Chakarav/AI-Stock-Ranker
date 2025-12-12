@@ -11,7 +11,7 @@ import os
 EMAIL_SENDER = "vishwajeetchakaravarthi@gmail.com"
 EMAIL_PASSWORD = "cxpu bbnm rqus mkva"
 # Add all subscribers here (for now, hardcode them to ensure delivery)
-SUBSCRIBERS = ["vishwajeetchakaravarthi@gmail.com","yughan2006@gmail.com"] 
+SUBSCRIBERS = ["vishwajeetchakaravarthi@gmail.com"] 
 DASHBOARD_URL = "https://ai-stock-ranker-jmt6zuxodyrhsbrbgo7dck.streamlit.app/"
 # ==================================================
 
@@ -113,3 +113,4 @@ def send_daily_briefing():
 if __name__ == "__main__":
 
     send_daily_briefing()
+
