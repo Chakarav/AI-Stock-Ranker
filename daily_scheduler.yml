@@ -1,6 +1,7 @@
 name: Daily AlphaQuant Automation
 
-on: workflow_dispatch # Manual Button
+on:
+  workflow_dispatch: # Manual Button
 
 permissions:
   contents: write
@@ -21,12 +22,12 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install yfinance pandas numpy
 
+      # RUN THE REAL ENGINE
       - name: Run AI Engine
-        run: python debug_us_market.py
+        run: python main.py
 
-      # FORCE EMAIL STEP
       - name: Send Newsletter
         env:
           EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
@@ -35,6 +36,5 @@ jobs:
       - name: Commit & Push New Data
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: "Daily Update"
+          commit_message: "Daily Data Update"
           file_pattern: "*.csv"
-
