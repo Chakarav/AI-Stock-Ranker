@@ -24,7 +24,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run AI Engine
-        run: python main.py
+        run: python debug_us_market.py
 
       # FORCE EMAIL STEP
       - name: Send Newsletter
@@ -37,3 +37,4 @@ jobs:
         with:
           commit_message: "Daily Update"
           file_pattern: "*.csv"
+
