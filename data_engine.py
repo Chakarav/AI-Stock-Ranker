@@ -7,56 +7,69 @@ import numpy as np
 
 class DataEngine:
     def __init__(self):
-        print("⚙️ Initializing Institutional Data Engine (FULL POWER)...")
+        print("⚙️ Initializing Institutional Data Engine...")
 
-    # --- 1. DYNAMIC TICKER FETCHING ---
+    # --- 1. DYNAMIC TICKER FETCHING (With Disguise) ---
     def get_sp500_tickers(self):
         print("🔍 Scanning US Market (S&P 500)...")
         try:
             url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-            tables = pd.read_html(url)
+            # DISGUISE: Pretend to be Chrome Browser
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            r = requests.get(url, headers=headers)
+            
+            # Read HTML from the text response
+            tables = pd.read_html(io.StringIO(r.text))
             tickers = tables[0]['Symbol'].tolist()
-            return [t.replace('.', '-') for t in tickers]
-        except:
+            
+            # Clean Tickers
+            clean_tickers = [t.replace('.', '-') for t in tickers]
+            print(f"✅ SUCCESS: Found {len(clean_tickers)} US Tickers.")
+            return clean_tickers
+            
+        except Exception as e:
+            print(f"❌ S&P 500 SCAN FAILED: {e}")
+            print("⚠️ Using Fallback List (5 Stocks Only)")
             return ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"]
 
     def get_nifty50_tickers(self):
         print("🔍 Scanning India Market (Nifty 50)...")
         try:
             url = "https://archives.nseindia.com/content/indices/ind_nifty50list.csv"
-            headers = {'User-Agent': 'Mozilla/5.0'}
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
             s = requests.get(url, headers=headers).content
             df = pd.read_csv(io.StringIO(s.decode('utf-8')))
-            return [f"{x}.NS" for x in df['Symbol'].tolist()]
-        except:
+            
+            tickers = [f"{x}.NS" for x in df['Symbol'].tolist()]
+            print(f"✅ SUCCESS: Found {len(tickers)} India Tickers.")
+            return tickers
+            
+        except Exception as e:
+            print(f"❌ NIFTY 50 SCAN FAILED: {e}")
             return ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS"]
 
     # --- 2. LIVE DATA & FUNDAMENTALS ---
     def fetch_data(self, tickers, region="US"):
-        print(f"\n📥 Fetching Deep Analytics for {len(tickers)} tickers ({region})...")
+        print(f"\n📥 Fetching Analytics for {len(tickers)} tickers ({region})...")
         
-        # --- NO LIMITS: PROCESSING ALL TICKERS ---
-        # If GitHub Actions times out (runs longer than 6 hours), 
-        # we can come back and limit this to [:100].
-        # For now, we run FULL POWER.
-        
+        # PROCESSING ALL TICKERS (Unlimited)
         processed_list = []
         
-        # Batch processing to prevent memory issues
-        # We will download everything, but process one by one
         for t in tickers:
             try:
                 stock = yf.Ticker(t)
                 
-                # Fast history fetch (just enough for RSI)
-                hist = stock.history(period="3mo") # Reduced from 1y to speed up
-                
+                # Fetch just 3 months to be fast
+                hist = stock.history(period="3mo")
                 if hist.empty: continue
                 
-                # Fundamentals
                 info = stock.info
                 
-                # Safe Extraction
+                # Extract Fundamentals
                 pe_ratio = info.get('trailingPE', 0)
                 ev_ebitda = info.get('enterpriseToEbitda', 0)
                 pb_ratio = info.get('priceToBook', 0)
@@ -97,12 +110,11 @@ class DataEngine:
                 
                 processed_list.append(df)
                 
-                # Simple progress indicator for logs
-                if len(processed_list) % 10 == 0:
-                    print(f"✅ Processed {len(processed_list)} / {len(tickers)}")
+                # Progress Log
+                if len(processed_list) % 20 == 0:
+                    print(f"   Processed {len(processed_list)} / {len(tickers)}")
 
             except Exception as e:
-                # Silent fail on individual stocks to keep pipeline moving
                 continue
 
         if not processed_list: return pd.DataFrame()
