@@ -37,7 +37,6 @@ class DataEngine:
         
         # LIMIT for speed (Fetching fundamentals is slow)
         # We process top 30 tickers to keep GitHub Actions from timing out.
-        # You can increase this if you have a paid GitHub account.
         tickers = tickers[:30] 
 
         processed_list = []
@@ -69,8 +68,7 @@ class DataEngine:
                 rsi = 100 - (100 / (1 + rs))
                 current_rsi = rsi.iloc[-1]
 
-                # 4. Sentiment (Simulated for now, as real sentiment needs News API)
-                # We base it loosely on RSI momentum for the dashboard visualization
+                # 4. Sentiment (Simulated for visualization)
                 sentiment = 0.5 
                 if current_rsi < 30: sentiment = 0.8 # Bullish
                 elif current_rsi > 70: sentiment = 0.2 # Bearish
@@ -83,7 +81,7 @@ class DataEngine:
                     "Date": latest.name.strftime('%Y-%m-%d'),
                     "Close": latest['Close'],
                     "RSI": current_rsi,
-                    # --- DASHBOARD COLUMNS ---
+                    # --- DASHBOARD COLUMNS (Restored!) ---
                     "PE_Ratio": pe_ratio,
                     "EV_EBITDA": ev_ebitda,
                     "PB_Ratio": pb_ratio,
@@ -91,7 +89,7 @@ class DataEngine:
                     "ROE": roe,
                     "Debt_Equity": debt_equity,
                     "Sentiment": sentiment,
-                    "Alpha_Score": 100 - current_rsi, # Simple Reversion Strategy
+                    "Alpha_Score": 100 - current_rsi, # Strategy Score
                     "Data_Source": "Live_YFinance"
                 }])
                 
@@ -105,8 +103,3 @@ class DataEngine:
         if not processed_list: return pd.DataFrame()
 
         return pd.concat(processed_list, ignore_index=True)
-
-if __name__ == "__main__":
-    eng = DataEngine()
-    data = eng.fetch_data(["AAPL", "TSLA"], region="US")
-    print(data.head())
