@@ -13,77 +13,88 @@ SENDER = "vishwajeetchakaravarthi@gmail.com"
 RECEIVERS = ["vishwajeetchakaravarthi@gmail.com"]
 
 def send_email():
-    print("📧 Starting Email Bot...")
+    print("📧 Starting Multi-Market Email Bot...")
     
-    # --- FIX 1: CHECK BOTH PASSWORD NAMES ---
-    # We try 'EMAIL_PASSWORD' first. If missing, we try 'APP_PASSWORD'.
+    # 1. AUTH
+    # Check both potential secret names
     raw_pass = os.environ.get("EMAIL_PASSWORD")
     if not raw_pass:
         raw_pass = os.environ.get("APP_PASSWORD")
         
     if not raw_pass:
-        print("❌ CRITICAL: Could not find password in environment variables.")
+        print("❌ CRITICAL: Password missing.")
         exit(1)
         
-    # Clean the password (remove spaces)
     password = raw_pass.replace(" ", "").strip()
-    print("✅ Password found.")
 
-    # --- FIX 2: TARGET THE RIGHT FILE ---
-    # We ONLY look for files ending in "_rankings.csv"
-    # This prevents it from reading the backtest history file.
+    # 2. FIND ALL RANKING FILES
+    # This will find both 'IN_rankings.csv' AND 'US_rankings.csv'
     files = glob.glob("*_rankings.csv")
     
     if not files:
-        print("❌ No '_rankings.csv' file found. Checking folder...")
-        print(os.listdir(".")) # Print all files to debug
+        print("❌ No ranking files found.")
         return
-            
-    filename = files[0]
-    print(f"✅ Reading Correct Data from: {filename}")
+
+    print(f"✅ Found files: {files}")
+
+    # 3. BUILD EMAIL CONTENT
+    email_html_body = ""
     
-    try:
-        # 3. READ & SELECT DATA
-        df = pd.read_csv(filename)
-        
-        # Smart column selection (Prevents crashing if a column is missing)
-        # We assume 'Close' is the price.
-        desired_cols = ['Ticker', 'Close', 'Alpha_Score', 'RSI', 'Data_Source']
-        cols = [c for c in desired_cols if c in df.columns]
-        
-        # Get top 10 rows
-        top_picks = df[cols].head(10)
-
-        # 4. COMPOSE HTML EMAIL
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"🚀 Daily AlphaQuant: {datetime.now().strftime('%d-%b')}"
-        msg["From"] = SENDER
-        msg["To"] = ", ".join(RECEIVERS)
-        
-        html = f"""
-        <html>
-          <body style="font-family: Arial, sans-serif;">
-            <h2 style="color: #2E86C1;">Daily Market Intelligence</h2>
-            <p>Top 10 High-Conviction Setups:</p>
+    # Loop through EVERY file found (India AND US)
+    for filename in files:
+        print(f"   Processing: {filename}...")
+        try:
+            df = pd.read_csv(filename)
+            
+            # Determine Region Name from filename (e.g., "IN_rankings.csv" -> "IN")
+            region_name = filename.split("_")[0] 
+            
+            # Smart Column Selection
+            desired_cols = ['Ticker', 'Close', 'Alpha_Score', 'RSI', 'Data_Source']
+            cols = [c for c in desired_cols if c in df.columns]
+            
+            # Top 10 for this region
+            top_picks = df[cols].head(10)
+            
+            # Add a Header and Table for this region
+            email_html_body += f"""
+            <h3 style="color: #2E86C1; margin-top: 20px;">📍 Region: {region_name} Market</h3>
             {top_picks.to_html(index=False, border=1, justify="center")}
-            <p style="color: gray; font-size: 12px; margin-top: 20px;">
-               Automated by GitHub Actions | Data Source: {filename}
-            </p>
-          </body>
-        </html>
-        """
-        msg.attach(MIMEText(html, "html"))
+            <p style="font-size: 10px; color: gray;">Source: {filename}</p>
+            <hr>
+            """
+            
+        except Exception as e:
+            print(f"⚠️ Error processing {filename}: {e}")
 
-        # 5. SEND (Using SSL Connection)
-        server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
-        server.login(SENDER, password)
-        server.sendmail(SENDER, RECEIVERS, msg.as_string())
-        server.quit()
-        print("✅ Professional Report Sent!")
+    # 4. COMPOSE FINAL EMAIL
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"🌍 Global AlphaQuant Report: {datetime.now().strftime('%d-%b')}"
+    msg["From"] = SENDER
+    msg["To"] = ", ".join(RECEIVERS)
+    
+    final_html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif;">
+        <h2 style="color: #17202A;">🚀 Global Market Intelligence</h2>
+        <p>Fresh high-conviction setups for all tracked markets:</p>
         
-    except Exception as e:
-        print(f"❌ Error during processing: {e}")
-        exit(1)
+        {email_html_body}
+        
+        <p style="color: gray; font-size: 12px; margin-top: 30px;">
+           Automated by GitHub Actions
+        </p>
+      </body>
+    </html>
+    """
+    msg.attach(MIMEText(final_html, "html"))
+
+    # 5. SEND
+    server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
+    server.login(SENDER, password)
+    server.sendmail(SENDER, RECEIVERS, msg.as_string())
+    server.quit()
+    print("✅ Global Report Sent!")
 
 if __name__ == "__main__":
     send_email()
