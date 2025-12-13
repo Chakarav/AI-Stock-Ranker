@@ -3,103 +3,110 @@ import pandas as pd
 import requests
 import io
 import datetime
+import numpy as np
 
 class DataEngine:
     def __init__(self):
-        print("⚙️ Initializing Dynamic Data Engine...")
+        print("⚙️ Initializing Institutional Data Engine...")
 
-    # --- DYNAMIC TICKER FETCHING ---
+    # --- 1. DYNAMIC TICKER FETCHING ---
     def get_sp500_tickers(self):
         print("🔍 Scanning US Market (S&P 500)...")
         try:
-            # Scrape Wikipedia for the live list
             url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
             tables = pd.read_html(url)
-            df = tables[0]
-            tickers = df['Symbol'].tolist()
-            # Clean tickers (Wikipedia uses '.' where Yahoo uses '-')
-            tickers = [t.replace('.', '-') for t in tickers]
-            print(f"✅ Found {len(tickers)} US Tickers.")
-            return tickers
-        except Exception as e:
-            print(f"❌ Error fetching S&P 500: {e}")
-            # Fallback if Wikipedia is down (Safety Net)
-            return ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
+            tickers = tables[0]['Symbol'].tolist()
+            return [t.replace('.', '-') for t in tickers]
+        except:
+            return ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"]
 
     def get_nifty50_tickers(self):
         print("🔍 Scanning India Market (Nifty 50)...")
         try:
-            # Official NSE CSV Source
             url = "https://archives.nseindia.com/content/indices/ind_nifty50list.csv"
-            # Headers to mimic a real browser so NSE doesn't block us
-            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-            
+            headers = {'User-Agent': 'Mozilla/5.0'}
             s = requests.get(url, headers=headers).content
             df = pd.read_csv(io.StringIO(s.decode('utf-8')))
-            
-            # Extract symbols and add .NS suffix
-            tickers = [f"{x}.NS" for x in df['Symbol'].tolist()]
-            print(f"✅ Found {len(tickers)} Indian Tickers.")
-            return tickers
-        except Exception as e:
-            print(f"❌ Error fetching Nifty 50: {e}")
-            # Fallback (Just in case NSE website is down)
-            return ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS"]
+            return [f"{x}.NS" for x in df['Symbol'].tolist()]
+        except:
+            return ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS"]
 
-    # --- LIVE DATA DOWNLOADER ---
+    # --- 2. LIVE DATA & FUNDAMENTALS ---
     def fetch_data(self, tickers, region="US"):
-        print(f"\n📥 Downloading Data for {len(tickers)} tickers ({region})...")
+        print(f"\n📥 Fetching Deep Analytics for {len(tickers)} tickers ({region})...")
         
-        # Limit to first 30 tickers for speed during testing
-        # (Remove '[:30]' later if you want the FULL 500 stocks)
+        # LIMIT for speed (Fetching fundamentals is slow)
+        # We process top 30 tickers to keep GitHub Actions from timing out.
+        # You can increase this if you have a paid GitHub account.
         tickers = tickers[:30] 
 
-        end_date = datetime.date.today()
-        start_date = end_date - datetime.timedelta(days=365)
+        processed_list = []
+        
+        for t in tickers:
+            try:
+                # 1. Get History (Price)
+                stock = yf.Ticker(t)
+                hist = stock.history(period="1y")
+                
+                if hist.empty: continue
+                
+                # 2. Get Fundamentals (The "Dashboard Data")
+                info = stock.info
+                
+                # Extract Dashboard-Specific Metrics (Safe Get with default 0)
+                pe_ratio = info.get('trailingPE', 0)
+                ev_ebitda = info.get('enterpriseToEbitda', 0)
+                pb_ratio = info.get('priceToBook', 0)
+                margins = info.get('profitMargins', 0) * 100 if info.get('profitMargins') else 0
+                roe = info.get('returnOnEquity', 0) * 100 if info.get('returnOnEquity') else 0
+                debt_equity = info.get('debtToEquity', 0)
+                
+                # 3. Calculate RSI
+                delta = hist['Close'].diff()
+                gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+                rs = gain / loss
+                rsi = 100 - (100 / (1 + rs))
+                current_rsi = rsi.iloc[-1]
 
-        try:
-            # Batch download from Yahoo Finance
-            data = yf.download(tickers, start=start_date, end=end_date, group_by='ticker', progress=False)
-            
-            processed_list = []
+                # 4. Sentiment (Simulated for now, as real sentiment needs News API)
+                # We base it loosely on RSI momentum for the dashboard visualization
+                sentiment = 0.5 
+                if current_rsi < 30: sentiment = 0.8 # Bullish
+                elif current_rsi > 70: sentiment = 0.2 # Bearish
 
-            for t in tickers:
-                try:
-                    # Handle data structure (Single vs Multi-Index)
-                    if len(tickers) > 1:
-                        df = data[t].copy()
-                    else:
-                        df = data.copy()
+                # 5. Build Row
+                latest = hist.iloc[-1]
+                
+                df = pd.DataFrame([{
+                    "Ticker": t.replace(".NS", ""),
+                    "Date": latest.name.strftime('%Y-%m-%d'),
+                    "Close": latest['Close'],
+                    "RSI": current_rsi,
+                    # --- DASHBOARD COLUMNS ---
+                    "PE_Ratio": pe_ratio,
+                    "EV_EBITDA": ev_ebitda,
+                    "PB_Ratio": pb_ratio,
+                    "Margins": margins,
+                    "ROE": roe,
+                    "Debt_Equity": debt_equity,
+                    "Sentiment": sentiment,
+                    "Alpha_Score": 100 - current_rsi, # Simple Reversion Strategy
+                    "Data_Source": "Live_YFinance"
+                }])
+                
+                processed_list.append(df)
+                print(f"✅ Processed: {t}")
 
-                    df = df.dropna()
-                    if df.empty: continue
+            except Exception as e:
+                print(f"⚠️ Failed: {t} - {e}")
+                continue
 
-                    # Grab Live Price
-                    latest_price = float(df['Close'].iloc[-1])
-                    
-                    # Structure Data
-                    df['Ticker'] = t.replace(".NS", "") 
-                    df['Region'] = region
-                    df = df.reset_index()
-                    
-                    if 'Date' not in df.columns and 'Datetime' in df.columns:
-                        df.rename(columns={'Datetime': 'Date'}, inplace=True)
-                    
-                    processed_list.append(df)
-                except:
-                    continue
+        if not processed_list: return pd.DataFrame()
 
-            if not processed_list: return pd.DataFrame()
-
-            return pd.concat(processed_list)
-
-        except Exception as e:
-            print(f"❌ Download Error: {e}")
-            return pd.DataFrame()
+        return pd.concat(processed_list, ignore_index=True)
 
 if __name__ == "__main__":
     eng = DataEngine()
-    sp500 = eng.get_sp500_tickers()
-    print(f"Sample US: {sp500[:5]}")
-    nifty = eng.get_nifty50_tickers()
-    print(f"Sample IN: {nifty[:5]}")
+    data = eng.fetch_data(["AAPL", "TSLA"], region="US")
+    print(data.head())
