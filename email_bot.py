@@ -10,7 +10,7 @@ from datetime import datetime
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465 
 SENDER = "vishwajeetchakaravarthi@gmail.com"
-RECEIVERS = ["vishwajeetchakaravarthi@gmail.com"]
+RECEIVERS = ["vishwajeetchakaravarthi@gmail.com","yughan2006@gmail.com"]
 
 # 🔗 YOUR DASHBOARD LINK
 DASHBOARD_URL = "https://ai-stock-ranker-jmt6zuxodyrhsbrbgo7dck.streamlit.app"
@@ -84,3 +84,4 @@ def send_email():
 
 if __name__ == "__main__":
     send_email()
+
