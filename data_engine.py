@@ -1,107 +1,91 @@
-# src/data_engine.py
 import yfinance as yf
 import pandas as pd
-import requests
-from textblob import TextBlob
-
-# ==========================================
-# PASTE YOUR NEWSAPI KEY HERE
-NEWS_API_KEY = "5f63e4cd71e04979836f15c58469710b"
-# ==========================================
+import datetime
+import time
 
 class DataEngine:
-    def __init__(self, market_name):
-        self.market = market_name
+    def __init__(self):
+        print("⚙️ Initializing Live Data Engine...")
 
-    def get_sentiment(self, ticker):
-        query = ticker.replace('.NS', '')
-        url = f"https://newsapi.org/v2/everything?q={query}&apiKey={NEWS_API_KEY}&language=en&sortBy=publishedAt&pageSize=5"
+    def fetch_data(self, tickers, region="US"):
+        print(f"\n📥 STARTING DOWNLOAD: {region} Market ({len(tickers)} tickers)")
+        
+        # 1. CLEAN TICKERS
+        # India needs '.NS', US needs nothing.
+        clean_tickers = []
+        for t in tickers:
+            t = t.strip()
+            if region == "IN" and not t.endswith(".NS"):
+                t = f"{t}.NS"
+            clean_tickers.append(t)
+
+        print(f"📋 Ticker List: {clean_tickers}")
+
+        # 2. DEFINE DATES (Last 1 year to ensure we have enough for RSI)
+        end_date = datetime.date.today()
+        start_date = end_date - datetime.timedelta(days=365)
+
+        # 3. DOWNLOAD (FORCE YFINANCE)
         try:
-            response = requests.get(url).json()
-            articles = response.get('articles', [])
-            if not articles: return 0.0
+            print(f"⏳ Contacting Yahoo Finance...")
+            # group_by='ticker' ensures we get a structure we can loop through easily
+            data = yf.download(clean_tickers, start=start_date, end=end_date, group_by='ticker', progress=False)
             
-            score = 0
-            for article in articles:
-                title = article['title']
-                if title: score += TextBlob(title).sentiment.polarity
-            return score / len(articles)
-        except:
-            return 0.0
+            if data.empty:
+                print("❌ CRITICAL: Download returned EMPTY data.")
+                return pd.DataFrame()
 
-    def fetch_data(self, ticker_list):
-        print(f"---  Initializing Institutional Data Scan ({self.market}) ---")
-        all_data = []
+            processed_data = []
 
-        for ticker in ticker_list:
-            print(f"Processing: {ticker}...")
-            try:
-                stock = yf.Ticker(ticker)
-                
-                # 1. Get Price History (Technical)
-                hist = stock.history(period="6mo")
-                if hist.empty: continue
-                
-                # 2. Get Deep Fundamentals
-                info = stock.info
-                
-                # --- The "Hedge Fund" Metrics ---
-                pe = info.get('trailingPE', 0)
-                pb = info.get('priceToBook', 0)              # Value: < 1 is cheap
-                ev_ebitda = info.get('enterpriseToEbitda', 0) # Better than P/E for debt-heavy firms
-                debt_equity = info.get('debtToEquity', 0)    # Safety: > 200 is risky
-                margins = info.get('profitMargins', 0)       # Quality: Higher is better
-                roe = info.get('returnOnEquity', 0)          # Efficiency
-                
-                # 3. Sentiment
-                sentiment = self.get_sentiment(ticker)
-                
-                # 4. Technical Indicators
-                close_price = hist['Close'].iloc[-1]
-                # Simple RSI Calculation
-                delta = hist['Close'].diff()
-                gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-                loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-                rs = gain / loss
-                rsi = 100 - (100 / (1 + rs))
-                current_rsi = rsi.iloc[-1]
+            # 4. PROCESS EACH TICKER
+            for t in clean_tickers:
+                try:
+                    # Extract single ticker DF
+                    if len(clean_tickers) == 1:
+                        df = data.copy()
+                    else:
+                        df = data[t].copy()
 
-                # 5. Composite Scoring Model (0-100)
-                # We reward: Low Valuations (PE/EV), High Quality (Margins/ROE), Safe Debt, Positive Sentiment
-                score = 0
-                
-                # Value Score (30%)
-                if 0 < pe < 25: score += 15
-                if 0 < ev_ebitda < 15: score += 15
-                
-                # Quality Score (30%)
-                if margins > 0.15: score += 15  # >15% margin is healthy
-                if roe > 0.15: score += 15      # >15% ROE is strong
-                
-                # Safety Score (20%)
-                if debt_equity < 100: score += 20 # Low debt
-                
-                # Momentum/Sentiment (20%)
-                if sentiment > 0.1: score += 10
-                if 30 < current_rsi < 70: score += 10 # Not overbought
-                
-                # Append Data
-                all_data.append({
-                    'Ticker': ticker,
-                    'Close': close_price,
-                    'Alpha_Score': score,
-                    'PE_Ratio': pe,
-                    'EV_EBITDA': ev_ebitda,
-                    'PB_Ratio': pb,
-                    'Margins': margins * 100, # Percent
-                    'ROE': roe * 100,         # Percent
-                    'Debt_Equity': debt_equity,
-                    'Sentiment': sentiment,
-                    'RSI': current_rsi
-                })
-                
-            except Exception as e:
-                print(f"Failed on {ticker}")
+                    # Drop empty rows
+                    df = df.dropna()
 
-        df = pd.DataFrame(all_data)
-        return df.sort_values(by='Alpha_Score', ascending=False)
+                    if df.empty:
+                        print(f"⚠️ No data found for {t} (Skipping)")
+                        continue
+
+                    # Get the LATEST price (Live Data)
+                    latest_price = df['Close'].iloc[-1]
+                    print(f"✅ {t}: {latest_price:.2f}")
+
+                    # Structure it for the pipeline
+                    df['Ticker'] = t.replace(".NS", "") # Remove .NS for cleaner display
+                    df['Region'] = region
+                    df = df.reset_index() # Make Date a column
+                    
+                    # Rename Date col if needed
+                    if 'Date' not in df.columns and 'Datetime' in df.columns:
+                        df.rename(columns={'Datetime': 'Date'}, inplace=True)
+
+                    processed_data.append(df)
+
+                except Exception as e:
+                    print(f"⚠️ Error processing ticker {t}: {e}")
+
+            if not processed_data:
+                print("❌ ALL tickers failed processing.")
+                return pd.DataFrame()
+
+            # Combine all into one big table
+            final_df = pd.concat(processed_data)
+            print(f"✅ FINAL DATASET: {len(final_df)} rows.")
+            return final_df
+
+        except Exception as e:
+            print(f"❌ FATAL DOWNLOAD ERROR: {e}")
+            return pd.DataFrame()
+
+if __name__ == "__main__":
+    # Test Block
+    engine = DataEngine()
+    print("Testing US...")
+    engine.fetch_data(["AAPL", "TSLA", "GOOGL"], region="US")
