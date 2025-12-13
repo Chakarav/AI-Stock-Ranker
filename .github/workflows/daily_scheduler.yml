@@ -1,8 +1,6 @@
 name: Daily AlphaQuant Automation
 
 on:
-  schedule:
-    - cron: '5 4 * * *'
   workflow_dispatch:
 
 permissions:
@@ -26,15 +24,17 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 1. GENERATE DATA
       - name: Run AI Engine
         run: python main.py
 
-      # (EMAIL STEP REMOVED TEMPORARILY TO PREVENT CRASH)
+      # THIS IS THE STEP THAT WAS MISSING
+      - name: Send Newsletter
+        env:
+          EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
+        run: python email_bot.py
 
-      # 2. SAVE DATA
       - name: Commit & Push New Data
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: "Daily Data Update: Auto-generated"
+          commit_message: "Daily Data Update"
           file_pattern: "*.csv"
