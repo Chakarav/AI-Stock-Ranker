@@ -12,89 +12,75 @@ SMTP_PORT = 465
 SENDER = "vishwajeetchakaravarthi@gmail.com"
 RECEIVERS = ["vishwajeetchakaravarthi@gmail.com"]
 
+# 🔗 YOUR DASHBOARD LINK
+DASHBOARD_URL = "https://ai-stock-ranker-jmt6zuxodyrhsbrbgo7dck.streamlit.app"
+
 def send_email():
-    print("📧 Starting Multi-Market Email Bot...")
+    print("📧 Starting Email Bot...")
     
-    # 1. AUTH
-    # Check both potential secret names
-    raw_pass = os.environ.get("EMAIL_PASSWORD")
-    if not raw_pass:
-        raw_pass = os.environ.get("APP_PASSWORD")
-        
-    if not raw_pass:
-        print("❌ CRITICAL: Password missing.")
-        exit(1)
-        
+    # Auth
+    raw_pass = os.environ.get("EMAIL_PASSWORD") or os.environ.get("APP_PASSWORD")
+    if not raw_pass: exit(1)
     password = raw_pass.replace(" ", "").strip()
 
-    # 2. FIND ALL RANKING FILES
-    # This will find both 'IN_rankings.csv' AND 'US_rankings.csv'
+    # Find Files
     files = glob.glob("*_rankings.csv")
-    
-    if not files:
-        print("❌ No ranking files found.")
-        return
+    if not files: return
 
-    print(f"✅ Found files: {files}")
-
-    # 3. BUILD EMAIL CONTENT
+    # Build Email Body
     email_html_body = ""
-    
-    # Loop through EVERY file found (India AND US)
     for filename in files:
-        print(f"   Processing: {filename}...")
         try:
             df = pd.read_csv(filename)
-            
-            # Determine Region Name from filename (e.g., "IN_rankings.csv" -> "IN")
             region_name = filename.split("_")[0] 
             
-            # Smart Column Selection
-            desired_cols = ['Ticker', 'Close', 'Alpha_Score', 'RSI', 'Data_Source']
-            cols = [c for c in desired_cols if c in df.columns]
+            # Select columns for EMAIL (Keep it simple for the inbox)
+            # The Dashboard has the full details (PE, Margins, etc.)
+            cols = [c for c in ['Ticker', 'Close', 'Alpha_Score', 'RSI'] if c in df.columns]
+            top_picks = df[cols].head(5) 
             
-            # Top 10 for this region
-            top_picks = df[cols].head(10)
-            
-            # Add a Header and Table for this region
             email_html_body += f"""
-            <h3 style="color: #2E86C1; margin-top: 20px;">📍 Region: {region_name} Market</h3>
+            <h3 style="color: #2E86C1; margin-top: 20px;">📍 {region_name} Top Picks</h3>
             {top_picks.to_html(index=False, border=1, justify="center")}
-            <p style="font-size: 10px; color: gray;">Source: {filename}</p>
-            <hr>
             """
-            
-        except Exception as e:
-            print(f"⚠️ Error processing {filename}: {e}")
+        except: continue
 
-    # 4. COMPOSE FINAL EMAIL
+    # COMPOSE FINAL EMAIL
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🌍 Global AlphaQuant Report: {datetime.now().strftime('%d-%b')}"
+    msg["Subject"] = f"🌍 AlphaQuant Alert: {datetime.now().strftime('%d-%b')}"
     msg["From"] = SENDER
     msg["To"] = ", ".join(RECEIVERS)
     
     final_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif;">
-        <h2 style="color: #17202A;">🚀 Global Market Intelligence</h2>
-        <p>Fresh high-conviction setups for all tracked markets:</p>
+        <h2 style="color: #17202A;">🚀 Daily Market Intelligence</h2>
         
         {email_html_body}
         
-        <p style="color: gray; font-size: 12px; margin-top: 30px;">
-           Automated by GitHub Actions
-        </p>
+        <br>
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="{DASHBOARD_URL}" 
+               style="background-color: #28B463; color: white; padding: 14px 25px; 
+                      text-align: center; text-decoration: none; display: inline-block; 
+                      font-size: 16px; border-radius: 5px; font-weight: bold;">
+               📊 VIEW FULL DASHBOARD
+            </a>
+            <p style="color: gray; font-size: 12px; margin-top: 10px;">
+               Click above to see PE Ratios, Valuation Maps, and Deep Analytics.
+            </p>
+        </div>
       </body>
     </html>
     """
     msg.attach(MIMEText(final_html, "html"))
 
-    # 5. SEND
+    # SEND
     server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
     server.login(SENDER, password)
     server.sendmail(SENDER, RECEIVERS, msg.as_string())
     server.quit()
-    print("✅ Global Report Sent!")
+    print("✅ Report Sent with Dashboard Link!")
 
 if __name__ == "__main__":
     send_email()
