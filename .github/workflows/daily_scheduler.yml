@@ -2,7 +2,7 @@ name: Daily AlphaQuant Automation
 on:
   schedule:
     # 9:45 UTC = 3:15 PM IST
-    - cron: '45 9 * * *'
+    - cron: '5 4 * * *'
   workflow_dispatch: # Keeps the manual button
 
 permissions:
@@ -39,4 +39,5 @@ jobs:
         with:
           commit_message: "Daily Data Update"
           file_pattern: "*.csv"
+
 
