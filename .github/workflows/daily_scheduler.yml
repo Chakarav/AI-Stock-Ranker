@@ -1,7 +1,10 @@
 name: Daily AlphaQuant Automation
 
 on:
-  workflow_dispatch:
+  schedule:
+    # 4:05 UTC = 9:35 AM IST
+    - cron: '5 4 * * *'
+  workflow_dispatch: # Keeps the manual button
 
 permissions:
   contents: write
@@ -27,7 +30,6 @@ jobs:
       - name: Run AI Engine
         run: python main.py
 
-      # THIS IS THE STEP THAT WAS MISSING
       - name: Send Newsletter
         env:
           EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
