@@ -1,10 +1,10 @@
-name: Daily AlphaQuant Automation
+name: IronGate Automation
 
 on:
   schedule:
     # 4:05 UTC = 9:35 AM IST
     - cron: '5 4 * * *'
-  workflow_dispatch: # Keeps the manual button
+  workflow_dispatch: # Manual trigger
 
 permissions:
   contents: write
@@ -27,16 +27,16 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run AI Engine
+      - name: Run IronGate Engine
         run: python main.py
 
-      - name: Send Newsletter
+      - name: Transmit Brief
         env:
           EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
         run: python email_bot.py
 
-      - name: Commit & Push New Data
+      - name: Commit Database
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: "Daily Data Update"
+          commit_message: "IronGate Data Update"
           file_pattern: "*.csv"
