@@ -10,120 +10,130 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS OVERRIDES (THE "BLACK MODE" FIX)
+# 2. CSS OVERRIDES (THE "PREMIUM" LOOK)
 st.markdown("""
     <style>
-    /* IMPORT PROFESSIONAL FONTS */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+    /* IMPORT "SEXY" FONTS */
+    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
 
     /* GLOBAL RESET */
     * {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Rajdhani', sans-serif;
     }
 
-    /* FORCE SIDEBAR TO BE BLACK */
+    /* PITCH BLACK SIDEBAR */
     [data-testid="stSidebar"] {
-        background-color: #000000 !important;
-        border-right: 1px solid #333333;
+        background-color: #050505 !important; /* Almost black, slight warm tint */
+        border-right: 1px solid #222;
     }
     
-    /* SIDEBAR TEXT COLOR */
+    /* SIDEBAR TEXT */
     [data-testid="stSidebar"] * {
-        color: #e0e0e0 !important;
+        color: #888888 !important;
+        font-size: 14px;
     }
     
-    /* INPUT FIELDS (Make them dark) */
+    /* INPUT FIELDS (Stealth Mode) */
     .stTextInput input {
-        background-color: #1a1a1a !important;
-        color: #ffffff !important;
+        background-color: #111 !important;
+        color: #ddd !important;
         border: 1px solid #333 !important;
+        font-family: 'Space Mono', monospace !important;
+        font-size: 12px;
     }
     
-    /* BUTTON STYLING (Minimalist) */
+    /* BUTTON STYLING (Sharp & Aggressive) */
     .stButton button {
-        background-color: #1a1a1a !important;
-        color: #ffffff !important;
-        border: 1px solid #444 !important;
-        border-radius: 0px !important; /* Sharp edges for "Terminal" feel */
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 600 !important;
+        background-color: #000 !important;
+        color: #fff !important;
+        border: 1px solid #fff !important;
+        border-radius: 0px !important;
+        font-family: 'Rajdhani', sans-serif !important;
+        font-weight: 700 !important;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        transition: all 0.3s ease;
     }
     .stButton button:hover {
-        border-color: #ffffff !important;
-        color: #ffffff !important;
+        background-color: #fff !important;
+        color: #000 !important;
+        box-shadow: 0 0 10px rgba(255,255,255,0.5);
     }
 
-    /* REMOVE STREAMLIT BRANDING */
+    /* REMOVE BRANDING */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .block-container {padding-top: 2rem; padding-bottom: 2rem;}
 
-    /* TYPOGRAPHY */
+    /* TYPOGRAPHY OVERHAUL */
     h1 {
-        font-family: 'Inter', sans-serif;
-        font-weight: 800;
-        letter-spacing: -1.5px;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 700;
+        letter-spacing: 2px;
         text-transform: uppercase;
         color: #ffffff;
-        font-size: 3rem;
+        font-size: 3.5rem;
+        margin-bottom: 0px;
     }
     h3 {
-        font-family: 'Inter', sans-serif;
-        font-weight: 600;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 500;
         text-transform: uppercase;
-        font-size: 14px;
-        letter-spacing: 1px;
-        border-left: 3px solid #ffffff;
-        padding-left: 15px;
-        color: #cccccc;
+        font-size: 18px;
+        letter-spacing: 4px; /* Wide spacing looks expensive */
+        border-left: none;
+        color: #666;
+        margin-top: 30px;
     }
     
-    /* DATA TABLES (The "Bloomberg" Look) */
+    /* DATA TABLES (The "Space Mono" Look) */
     .stDataFrame {
-        font-family: 'JetBrains Mono', monospace !important;
+        font-family: 'Space Mono', monospace !important;
+        font-size: 12px;
+    }
+    div[data-testid="stDataFrame"] > div {
+        border: 1px solid #222;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. SIDEBAR: CLIENT ACCESS
+# 3. SIDEBAR
 with st.sidebar:
-    st.markdown("### IRONGATE RESEARCH")
-    st.caption("EST. 2025 | NEW YORK • MUMBAI")
+    st.markdown("<h2 style='color: #fff !important; letter-spacing: 3px;'>IRONGATE</h2>", unsafe_allow_html=True)
+    st.caption("QUANTITATIVE RESEARCH")
     
     st.markdown("---")
     
     st.markdown("**CLIENT PORTAL**")
-    email_input = st.text_input("INSTITUTIONAL EMAIL", placeholder="analyst@fund.com")
+    email_input = st.text_input("ACCESS KEY / EMAIL", placeholder="USR-8821...")
     
-    if st.button("REQUEST TERMINAL ACCESS"):
+    if st.button("AUTHENTICATE"):
         if email_input:
-            st.success("REQUEST LOGGED. COMPLIANCE REVIEW PENDING.")
+            st.success("CREDENTIALS VERIFIED.")
         else:
-            st.warning("INVALID CREDENTIALS.")
+            st.warning("ACCESS DENIED.")
             
     st.markdown("---")
     st.markdown("""
-        <div style='font-size: 10px; color: #666; font-family: "JetBrains Mono";'>
-        STATUS: LIVE<br>
-        LATENCY: 14ms<br>
-        ENCRYPTION: 256-BIT
+        <div style='font-size: 10px; color: #444; font-family: "Space Mono";'>
+        SERVER: NY-4<br>
+        UPTIME: 99.99%<br>
+        SECURE CONNECTION
         </div>
     """, unsafe_allow_html=True)
 
 # 4. MAIN DASHBOARD
 col1, col2 = st.columns([5, 1])
 with col1:
-    st.title("IRONGATE | EQUITY MONITOR")
+    st.title("IRONGATE EQUITY")
     st.markdown("""
-        <div style='font-family: "JetBrains Mono", monospace; font-size: 12px; color: #888; margin-bottom: 20px;'>
-        // SYSTEM_READY<br>
-        // MODEL: V4_CONVICTION<br>
-        // DATA_STREAM: ACTIVE
+        <div style='font-family: "Space Mono", monospace; font-size: 10px; color: #666; letter-spacing: 1px; margin-top: -10px;'>
+        INSTITUTIONAL SCREENER // V4.1 // LIVE
         </div>
     """, unsafe_allow_html=True)
 with col2:
-    if st.button("↻ SYNC DATA"):
+    if st.button("SYNC"):
         st.rerun()
 
 st.markdown("---")
@@ -137,28 +147,28 @@ def load_data(filename):
     return None
 
 # --- INDIA SECTION ---
-st.markdown("### MARKET: INDIA (NSE)")
+st.markdown("### INDIA / NSE")
 df_in = load_data("IN_rankings.csv")
 
 if df_in is not None:
     top = df_in.iloc[0]
     
-    # Custom CSS Metric Cards (Dark Mode)
+    # Custom "Glass" Metric Cards
     def metric_card(label, value):
         st.markdown(f"""
-        <div style="background-color: #111; padding: 15px; border: 1px solid #333; margin-bottom: 10px;">
-            <p style="color: #666; font-size: 11px; text-transform: uppercase; margin: 0;">{label}</p>
-            <p style="color: #fff; font-size: 24px; font-weight: 600; margin: 0; font-family: 'JetBrains Mono';">{value}</p>
+        <div style="background-color: #0a0a0a; padding: 20px; border-left: 2px solid #fff; margin-bottom: 10px;">
+            <p style="color: #666; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; margin: 0; font-family: 'Rajdhani';">{label}</p>
+            <p style="color: #fff; font-size: 28px; font-weight: 300; margin: 5px 0 0 0; font-family: 'Space Mono'; letter-spacing: -1px;">{value}</p>
         </div>
         """, unsafe_allow_html=True)
 
     c1, c2, c3, c4 = st.columns(4)
-    with c1: metric_card("HIGHEST CONVICTION", top['Ticker'])
+    with c1: metric_card("TOP CONVICTION", top['Ticker'])
     with c2: metric_card("ALPHA SCORE", f"{top['Alpha_Score']}")
-    with c3: metric_card("RSI STRENGTH", top['RSI'])
+    with c3: metric_card("RSI INDEX", top['RSI'])
     with c4: metric_card("VALUATION (P/E)", top['PE_Ratio'])
     
-    # Table with Dark Gradient
+    # Sleek Table
     st.dataframe(
         df_in.style.background_gradient(subset=['Alpha_Score'], cmap='Greens', vmin=0, vmax=100)
              .format("{:.2f}", subset=['Close', 'RSI', 'PE_Ratio', 'Margins']),
@@ -166,22 +176,21 @@ if df_in is not None:
         hide_index=True
     )
 else:
-    st.error("FEED DISCONNECTED.")
+    st.error("NO SIGNAL.")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # --- US SECTION ---
-st.markdown("### MARKET: USA (S&P 500)")
+st.markdown("### USA / NYSE")
 df_us = load_data("US_rankings.csv")
 
 if df_us is not None:
     top = df_us.iloc[0]
     
-    # Re-use metric cards
     u1, u2, u3, u4 = st.columns(4)
-    with u1: metric_card("HIGHEST CONVICTION", top['Ticker'])
+    with u1: metric_card("TOP CONVICTION", top['Ticker'])
     with u2: metric_card("ALPHA SCORE", f"{top['Alpha_Score']}")
-    with u3: metric_card("RSI STRENGTH", top['RSI'])
+    with u3: metric_card("RSI INDEX", top['RSI'])
     with u4: metric_card("VALUATION (P/E)", top['PE_Ratio'])
     
     st.dataframe(
@@ -191,4 +200,4 @@ if df_us is not None:
         hide_index=True
     )
 else:
-    st.error("FEED DISCONNECTED.")
+    st.error("NO SIGNAL.")
