@@ -20,10 +20,32 @@ st.markdown("""
     
     /* DATAFRAME STYLE */
     .stDataFrame {border: 1px solid #e0e0e0;}
+    
+    /* SIDEBAR STYLE */
+    [data-testid="stSidebar"] {background-color: #f9f9f9; border-right: 1px solid #e0e0e0;}
     </style>
     """, unsafe_allow_html=True)
 
-# HEADER
+# --- SIDEBAR: CLIENT ACCESS (SUBSCRIBE BUTTON) ---
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/25/25231.png", width=50) # GitHub logo placeholder or similar minimalist icon
+    st.header("IRONGATE RESEARCH")
+    st.caption("Institutional Equity Monitor")
+    st.markdown("---")
+    
+    st.subheader("Client Portal")
+    email_input = st.text_input("Enter Institutional Email")
+    
+    if st.button("Request Daily Briefing"):
+        if email_input:
+            st.success("Access Requested. Credentials will be sent to your inbox pending approval.")
+        else:
+            st.warning("Please enter a valid email.")
+            
+    st.markdown("---")
+    st.caption("© 2025 IronGate Capital.\nAuthorized Personnel Only.")
+
+# --- MAIN CONTENT ---
 col1, col2 = st.columns([4, 1])
 with col1:
     st.title("IRONGATE | EQUITY MONITOR")
@@ -56,7 +78,7 @@ if df_in is not None:
     c3.metric("RSI Strength", top['RSI'])
     c4.metric("Valuation (P/E)", top['PE_Ratio'])
     
-    # Data Table
+    # Data Table (Green Gradient)
     st.dataframe(
         df_in.style.background_gradient(subset=['Alpha_Score'], cmap='Greens'),
         use_container_width=True,
@@ -80,7 +102,7 @@ if df_us is not None:
     u3.metric("RSI Strength", top['RSI'])
     u4.metric("Valuation (P/E)", top['PE_Ratio'])
     
-    # Data Table
+    # Data Table (Green Gradient)
     st.dataframe(
         df_us.style.background_gradient(subset=['Alpha_Score'], cmap='Greens'),
         use_container_width=True,
