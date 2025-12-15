@@ -10,13 +10,13 @@ from datetime import datetime
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465 
 SENDER = "vishwajeetchakaravarthi@gmail.com"
-RECEIVERS = ["vishwajeetchakaravarthi@gmail.com","yughan2006@gmail.com"]
+RECEIVERS = ["vishwajeetchakaravarthi@gmail.com"]
 
 # 🔗 YOUR DASHBOARD LINK
 DASHBOARD_URL = "https://ai-stock-ranker-jmt6zuxodyrhsbrbgo7dck.streamlit.app"
 
 def send_email():
-    print("📧 Starting Email Bot...")
+    print(">> INITIATING IRONGATE TRANSMISSION PROTOCOL...")
     
     # Auth
     raw_pass = os.environ.get("EMAIL_PASSWORD") or os.environ.get("APP_PASSWORD")
@@ -34,41 +34,62 @@ def send_email():
             df = pd.read_csv(filename)
             region_name = filename.split("_")[0] 
             
-            # Select columns for EMAIL (Keep it simple for the inbox)
-            # The Dashboard has the full details (PE, Margins, etc.)
-            cols = [c for c in ['Ticker', 'Close', 'Alpha_Score', 'RSI'] if c in df.columns]
-            top_picks = df[cols].head(5) 
+            # Select Institutional Columns
+            cols = [c for c in ['Ticker', 'Close', 'Alpha_Score', 'PE_Ratio', 'Margins'] if c in df.columns]
+            top_picks = df[cols].head(5)
+            
+            # Formatting: Precision rounding
+            if 'Close' in top_picks.columns: top_picks['Close'] = top_picks['Close'].round(2)
+            if 'Margins' in top_picks.columns: top_picks['Margins'] = top_picks['Margins'].round(1)
+            
+            # TABLE STYLE: "Bloomberg Terminal" Monospace Look
+            table_html = top_picks.to_html(index=False, border=0)
+            table_html = table_html.replace('class="dataframe"', 'style="width: 100%; border-collapse: collapse; font-family: \'Courier New\', monospace; font-size: 12px; color: #333;"')
+            table_html = table_html.replace('<th>', '<th style="text-align: right; padding: 8px 4px; border-bottom: 2px solid #000; text-transform: uppercase; font-weight: bold;">')
+            table_html = table_html.replace('<td>', '<td style="text-align: right; padding: 6px 4px; border-bottom: 1px solid #ddd;">')
+            table_html = table_html.replace('text-align: right;">Ticker', 'text-align: left;">Ticker') 
             
             email_html_body += f"""
-            <h3 style="color: #2E86C1; margin-top: 20px;">📍 {region_name} Top Picks</h3>
-            {top_picks.to_html(index=False, border=1, justify="center")}
+            <div style="margin-bottom: 35px;">
+                <h3 style="font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #000; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; border-left: 4px solid #000; padding-left: 12px;">
+                    {region_name} / EQUITY_MONITOR
+                </h3>
+                {table_html}
+            </div>
             """
         except: continue
 
     # COMPOSE FINAL EMAIL
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🌍 AlphaQuant Alert: {datetime.now().strftime('%d-%b')}"
-    msg["From"] = SENDER
+    msg["Subject"] = f"IRONGATE: {datetime.now().strftime('%Y-%m-%d').upper()} BRIEF"
+    msg["From"] = "IronGate Research"
     msg["To"] = ", ".join(RECEIVERS)
     
     final_html = f"""
     <html>
-      <body style="font-family: Arial, sans-serif;">
-        <h2 style="color: #17202A;">🚀 Daily Market Intelligence</h2>
+      <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #111; max-width: 680px; margin: auto; background-color: #ffffff;">
         
+        <div style="padding-bottom: 20px; border-bottom: 4px solid #000; margin-bottom: 40px;">
+            <h1 style="font-size: 26px; font-weight: 800; letter-spacing: -1px; margin: 0; color: #000; text-transform: uppercase;">IronGate<span style="color: #555;">Research</span></h1>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px; border-top: 1px solid #ccc; padding-top: 8px;">
+                <span style="font-size: 10px; font-family: 'Courier New', monospace; color: #555;">UNIT: QUANT_STRATEGY</span>
+                <span style="font-size: 10px; font-family: 'Courier New', monospace; color: #555;">DATE: {datetime.now().strftime('%Y.%m.%d')}</span>
+            </div>
+        </div>
+
         {email_html_body}
         
-        <br>
-        <div style="text-align: center; margin-top: 30px;">
+        <div style="margin-top: 50px; text-align: left; background-color: #f4f4f4; padding: 20px;">
+            <p style="font-size: 11px; font-family: sans-serif; margin-bottom: 15px; color: #666;">Full valuation metrics and historical performance data available on the terminal.</p>
             <a href="{DASHBOARD_URL}" 
-               style="background-color: #28B463; color: white; padding: 14px 25px; 
-                      text-align: center; text-decoration: none; display: inline-block; 
-                      font-size: 16px; border-radius: 5px; font-weight: bold;">
-               📊 VIEW FULL DASHBOARD
+               style="font-family: 'Courier New', monospace; background-color: #000; color: #fff; padding: 12px 25px; 
+                      text-decoration: none; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
+               > ACCESS_TERMINAL
             </a>
-            <p style="color: gray; font-size: 12px; margin-top: 10px;">
-               Click above to see PE Ratios, Valuation Maps, and Deep Analytics.
-            </p>
+        </div>
+        
+        <div style="margin-top: 60px; border-top: 1px solid #eee; padding-top: 20px; font-size: 9px; color: #999; font-family: sans-serif; line-height: 1.5; text-align: justify;">
+            <p><strong>CONFIDENTIALITY NOTICE:</strong> The contents of this transmission, including any attachments, are proprietary to IronGate Research and intended solely for the use of the individual or entity to whom they are addressed. This automated analysis is generated by the IronGate Quantitative Engine (Ver 4.1). Past performance is not indicative of future results.</p>
         </div>
       </body>
     </html>
@@ -80,8 +101,7 @@ def send_email():
     server.login(SENDER, password)
     server.sendmail(SENDER, RECEIVERS, msg.as_string())
     server.quit()
-    print("✅ Report Sent with Dashboard Link!")
+    print(">> TRANSMISSION COMPLETE.")
 
 if __name__ == "__main__":
     send_email()
-
