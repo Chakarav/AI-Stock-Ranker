@@ -10,9 +10,12 @@ from datetime import datetime
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465 
 SENDER = "vishwajeetchakaravarthi@gmail.com"
-RECEIVERS = ["vishwajeetchakaravarthi@gmail.com","cnjags@gmail.com","yughan2006@gmail.com"]
-
-# 🔗 YOUR DASHBOARD LINK
+try:
+    subs_df = pd.read_csv("subscribers.csv")
+    RECEIVERS = subs_df['email'].dropna().unique().tolist()
+    print(f"Loaded {len(RECEIVERS)} subscribers.")
+except:
+    RECEIVERS = ["vishwajeetchakaravarthi@gmail.com"]
 DASHBOARD_URL = "https://ai-stock-ranker-jmt6zuxodyrhsbrbgo7dck.streamlit.app"
 
 def send_email():
@@ -105,4 +108,5 @@ def send_email():
 
 if __name__ == "__main__":
     send_email()
+
 
