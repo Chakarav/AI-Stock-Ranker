@@ -1,125 +1,90 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import smtplib
-from email.mime.text import MIMEText
+import os
 
-# 1. Page Config
-st.set_page_config(page_title="AlphaQuant Dashboard", layout="wide")
+# PAGE CONFIG
+st.set_page_config(page_title="IronGate Research", layout="wide", page_icon="🏛️")
 
-# Custom CSS for Professional Look
-# Custom CSS (Updated to work in Dark Mode)
+# CSS FOR INSTITUTIONAL LOOK
 st.markdown("""
-<style>
-    div[data-testid="stSidebarUserContent"] { padding-top: 2rem; }
-    .success-msg { color: #4caf50; font-weight: bold; }
-</style>
-""", unsafe_allow_html=True)
-
-st.title("📈 AlphaQuant | Institutional Analytics")
-
-# --- ADMIN NOTIFICATION SYSTEM ---
-def notify_admin(new_email):
-    """Sends an email to YOU when someone subscribes."""
-    try:
-        sender = "vishwajeetchakaravarthi@gmail.com"  # YOUR EMAIL
-        receiver = "vishwajeetchakaravarthi@gmail.com" # YOUR EMAIL (Send to self)
-        # Load password from Streamlit Secrets (safe way)
-        password = st.secrets["EMAIL_PASSWORD"] 
-        
-        msg = MIMEText(f"Hey! A new user wants to join the newsletter.\n\nEmail: {new_email}\n\nAction: Add them to SUBSCRIBERS list in email_bot.py")
-        msg['Subject'] = f"🔔 New AlphaQuant Subscriber: {new_email}"
-        msg['From'] = sender
-        msg['To'] = receiver
-        
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender, password)
-        server.send_message(msg)
-        server.quit()
-        return True
-    except Exception as e:
-        print(f"Email Error: {e}")
-        return False
-
-# 2. Sidebar
-with st.sidebar:
-    st.header("⚙️ Settings")
-    market = st.selectbox("Select Market", ["IN", "US"])
+    <style>
+    /* HIDE STREAMLIT BRANDING */
+    .block-container {padding-top: 2rem;}
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     
-    st.markdown("---")
-    st.header("📬 Daily Newsletter")
-    st.write("Get the top 10 picks delivered to your inbox every morning at 8:00 AM.")
+    /* TYPOGRAPHY */
+    h1 {font-family: 'Helvetica Neue', sans-serif; font-weight: 800; letter-spacing: -1px; text-transform: uppercase;}
+    h3 {font-family: 'Helvetica Neue', sans-serif; font-weight: 600; text-transform: uppercase; font-size: 16px; border-left: 5px solid #000; padding-left: 10px;}
     
-    # Subscribe Form
-    with st.form(key='sub_form'):
-        email_input = st.text_input("Enter your email")
-        submit = st.form_submit_button("Join Waitlist")
-        
-        if submit:
-            if "@" in email_input:
-                # 1. Show success to user immediately
-                st.success("✅ Request Sent! You are on the list.")
-                st.caption("The Fund Manager will approve your request shortly.")
-                
-                # 2. Notify Admin (You) quietly
-                if "EMAIL_PASSWORD" in st.secrets:
-                    notify_admin(email_input)
-                else:
-                    st.warning("Admin alert not configured (Check Secrets).")
-            else:
-                st.error("Invalid email address.")
+    /* DATAFRAME STYLE */
+    .stDataFrame {border: 1px solid #e0e0e0;}
+    </style>
+    """, unsafe_allow_html=True)
 
-# 3. Load Data (Safe Mode)
-@st.cache_data(ttl=0)
-def load_data(market):
-    try:
-        # Load from Root folder
-        df = pd.read_csv(f"{market}_rankings.csv")
+# HEADER
+col1, col2 = st.columns([4, 1])
+with col1:
+    st.title("IRONGATE | EQUITY MONITOR")
+    st.caption("INSTITUTIONAL SCREENER | MODEL: `V4_CONVICTION` | FEED: `LIVE`")
+with col2:
+    if st.button("↻ SYNC DATA"):
+        st.rerun()
+
+st.markdown("---")
+
+def load_data(filename):
+    if os.path.exists(filename):
+        df = pd.read_csv(filename)
+        # Clean rounding for display
+        numeric_cols = df.select_dtypes(include=['float64']).columns
+        df[numeric_cols] = df[numeric_cols].round(2)
         return df
-    except:
-        return pd.DataFrame()
+    return None
 
-df = load_data(market)
+# --- INDIA SECTION ---
+st.subheader("MARKET: INDIA (NSE)")
+df_in = load_data("IN_rankings.csv")
 
-# 4. Main Dashboard
-if not df.empty:
-    # Identify the correct Score column (handles old/new data formats)
-    cols = df.columns.tolist()
-    # Priority: Alpha_Score -> Final_Score -> ML_Confidence
-    score_col = next((c for c in ['Alpha_Score', 'Final_Score', 'ML_Confidence'] if c in cols), None)
+if df_in is not None:
+    top = df_in.iloc[0]
+    # Metrics Row
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Highest Conviction", top['Ticker'])
+    c2.metric("Alpha Score", f"{top['Alpha_Score']}/100")
+    c3.metric("RSI Strength", top['RSI'])
+    c4.metric("Valuation (P/E)", top['PE_Ratio'])
     
-    if score_col:
-        # --- Top Pick Section ---
-        top_stock = df.iloc[0]
-        col1, col2, col3 = st.columns(3)
-        col1.metric("🏆 Top Pick", top_stock['Ticker'])
-        col2.metric("Confidence Score", f"{top_stock[score_col]:.0f}/100")
-        col3.metric("Current Price", f"{top_stock['Close']:.2f}")
-        
-        st.markdown("---")
-        
-        # --- Deep Dive Table ---
-        st.subheader(f"📊 Market Opportunities ({market})")
-        # Highlight high scores in Green
-        st.dataframe(
-            df.head(10).style.background_gradient(subset=[score_col], cmap='Greens'),
-            use_container_width=True
-        )
-        
-        # --- Charts (Only if extended metrics exist) ---
-        if 'PE_Ratio' in cols and 'EV_EBITDA' in cols:
-            st.subheader("🔍 Valuation Map")
-            fig = px.scatter(
-                df, x='PE_Ratio', y=score_col, size='Close', color='EV_EBITDA',
-                title="Value (P/E) vs Quality (Alpha Score)",
-                labels={'PE_Ratio': 'P/E Ratio (Lower is Better)', score_col: 'AI Score'},
-                color_continuous_scale='RdYlGn_r' # Red to Green reversed
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-    else:
-        st.error(f"Data loaded, but '{score_col}' column is missing. Check CSV.")
+    # Data Table
+    st.dataframe(
+        df_in.style.background_gradient(subset=['Alpha_Score'], cmap='Greens'),
+        use_container_width=True,
+        hide_index=True
+    )
 else:
+    st.error("NO SIGNAL DETECTED. CHECK DATA FEED.")
 
-    st.info(f"⏳ Waiting for data... The robot runs daily at 8:00 AM.")
+st.markdown("---")
+
+# --- US SECTION ---
+st.subheader("MARKET: USA (S&P 500)")
+df_us = load_data("US_rankings.csv")
+
+if df_us is not None:
+    top = df_us.iloc[0]
+    # Metrics Row
+    u1, u2, u3, u4 = st.columns(4)
+    u1.metric("Highest Conviction", top['Ticker'])
+    u2.metric("Alpha Score", f"{top['Alpha_Score']}/100")
+    u3.metric("RSI Strength", top['RSI'])
+    u4.metric("Valuation (P/E)", top['PE_Ratio'])
+    
+    # Data Table
+    st.dataframe(
+        df_us.style.background_gradient(subset=['Alpha_Score'], cmap='Greens'),
+        use_container_width=True,
+        hide_index=True
+    )
+else:
+    st.error("NO SIGNAL DETECTED. CHECK DATA FEED.")
