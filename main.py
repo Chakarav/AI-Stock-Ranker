@@ -112,4 +112,35 @@ def analyze_market(tickers, region_name):
     df_candidates = pd.DataFrame(candidates)
     if df_candidates.empty: return
 
-    top_picks = df_candidates.sort_values(by="
+    top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(10)
+    
+    # 4. PREDICTION
+    print(f"   > Running AI Prediction on top {len(top_picks)}...")
+    predictions = []
+    for index, row in top_picks.iterrows():
+        pred_price = run_sarima_forecast(row['History'])
+        
+        if pd.notna(pred_price):
+            # Calculate Upside with FULL PRECISION first
+            upside = ((pred_price - row['Close']) / row['Close']) * 100
+        else:
+            upside = 0.0
+            
+        predictions.append(round(upside, 2)) # Round ONLY at the very end
+    
+    top_picks['SARIMA_Forecast_5D'] = predictions
+    del top_picks['History']
+    
+    filename = f"{region_name}_rankings.csv"
+    top_picks.to_csv(filename, index=False)
+    print(f"✅ Saved {filename}")
+
+def main():
+    print("🚀 IronGate Global Engine Starting...")
+    analyze_market(get_us_tickers(), "US")
+    analyze_market(get_india_tickers(), "IN")
+    analyze_market(get_uk_tickers(), "UK")
+    print("🏁 Analysis Complete.")
+
+if __name__ == "__main__":
+    main()
