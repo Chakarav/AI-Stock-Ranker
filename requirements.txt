@@ -12,5 +12,6 @@ oauth2client
 beautifulsoup4
 matplotlib
 PyGithub
+statsmodels
 
 
