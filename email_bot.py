@@ -1,84 +1,83 @@
 import smtplib
 import pandas as pd
 import os
-import glob
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
-# CONFIG (Same as before)
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465 
 SENDER = "vishwajeetchakaravarthi@gmail.com"
-# LOAD SUBSCRIBERS
+
+# Load Subscribers
 try:
-    subs_df = pd.read_csv("subscribers.csv")
-    RECEIVERS = subs_df['email'].dropna().unique().tolist()
+    subs = pd.read_csv("subscribers.csv")
+    RECEIVERS = subs['email'].dropna().unique().tolist()
 except:
     RECEIVERS = ["vishwajeetchakaravarthi@gmail.com"]
 
 DASHBOARD_URL = "https://ai-stock-ranker-jmt6zuxodyrhsbrbgo7dck.streamlit.app"
 
 def send_email():
-    print("📠 Generating Global Brief...")
-    
-    raw_pass = os.environ.get("EMAIL_PASSWORD") or os.environ.get("APP_PASSWORD")
-    if not raw_pass: exit(1)
-    password = raw_pass.replace(" ", "").strip()
+    print("📠 Generating Report...")
+    raw_pass = os.environ.get("EMAIL_PASSWORD")
+    if not raw_pass: 
+        print("❌ No Password Found")
+        return
 
-    email_html_body = ""
-    
-    # Process all 3 regions
+    email_body = ""
+    has_data = False
+
     for region in ["US", "IN", "UK"]:
         filename = f"{region}_rankings.csv"
         if os.path.exists(filename):
             try:
                 df = pd.read_csv(filename)
+                if df.empty: continue
                 
-                # Format Table
-                cols = ['Ticker', 'Close', 'Blend_Score', 'SARIMA_Forecast_5D', 'PE_Ratio']
-                display_df = df[cols].head(10) # TOP 10
-                
-                table_html = display_df.to_html(index=False, border=0)
-                # Institutional Styling
-                table_html = table_html.replace('class="dataframe"', 'style="width: 100%; border-collapse: collapse; font-family: \'Courier New\', monospace; font-size: 12px;"')
-                table_html = table_html.replace('<th>', '<th style="text-align: right; padding: 4px; border-bottom: 2px solid #000; background: #f0f0f0;">')
-                table_html = table_html.replace('<td>', '<td style="text-align: right; padding: 4px; border-bottom: 1px solid #ddd;">')
-                
-                email_html_body += f"""
-                <div style="margin-bottom: 25px;">
-                    <h3 style="font-family: Arial; border-left: 4px solid #000; padding-left: 10px;">
-                        {region} MARKET / TOP 10
-                    </h3>
-                    {table_html}
-                </div>
-                """
-            except: continue
+                # Check required columns exist, if not, skip to prevent error
+                if 'Blend_Score' not in df.columns: continue
 
-    # EMAIL TEMPLATE
+                df = df[['Ticker', 'Close', 'Blend_Score', 'SARIMA_Forecast_5D', 'PE_Ratio']].head(5)
+                
+                # Create HTML Table
+                table_html = df.to_html(index=False, border=0)
+                table_html = table_html.replace('class="dataframe"', 'style="width:100%; border-collapse:collapse; font-family:monospace; font-size:12px; margin-bottom:20px;"')
+                table_html = table_html.replace('<th>', '<th style="text-align:right; background:#eee; padding:5px; border-bottom:2px solid black;">')
+                table_html = table_html.replace('<td>', '<td style="text-align:right; padding:5px; border-bottom:1px solid #ddd;">')
+                
+                email_body += f"<h3 style='border-left:5px solid black; padding-left:10px;'>{region} MARKET</h3>{table_html}"
+                has_data = True
+            except: pass
+    
+    if not has_data:
+        print("⚠️ No new data to send.")
+        return
+
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"IRONGATE GLOBAL: {datetime.now().strftime('%d %b')}"
+    msg["Subject"] = f"IRONGATE BRIEF: {datetime.now().strftime('%d %b')}"
     msg["From"] = "IronGate Research"
     msg["To"] = ", ".join(RECEIVERS)
     
     final_html = f"""
     <html>
-      <body style="font-family: Arial, sans-serif; color: #000; max-width: 800px;">
-        <h2 style="letter-spacing: -1px;">IRONGATE <span style="color:#666">GLOBAL</span></h2>
-        <p>STRATEGY: BLEND (Value+Growth) | MODEL: SARIMA (5-Day Forecast)</p>
-        <hr style="border: 1px solid #000;">
-        {email_html_body}
+    <body style="font-family: Arial, sans-serif; color: #333;">
+        <h2>IRONGATE <span style="color:#666">GLOBAL</span></h2>
+        <p style="font-size:12px; color:#555;">STRATEGY: VALUE/GROWTH BLEND + AI FORECAST</p>
+        <hr>
+        {email_body}
         <br>
-        <a href="{DASHBOARD_URL}" style="background:#000; color:#fff; padding:10px 20px; text-decoration:none;">OPEN TERMINAL</a>
-      </body>
+        <a href="{DASHBOARD_URL}" style="background:black; color:white; padding:10px 20px; text-decoration:none; font-weight:bold;">OPEN TERMINAL</a>
+    </body>
     </html>
     """
     msg.attach(MIMEText(final_html, "html"))
 
-    server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
-    server.login(SENDER, password)
-    server.sendmail(SENDER, RECEIVERS, msg.as_string())
-    server.quit()
+    with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+        server.login(SENDER, raw_pass)
+        server.sendmail(SENDER, RECEIVERS, msg.as_string())
+    
+    print("✅ Email Sent.")
 
 if __name__ == "__main__":
     send_email()
