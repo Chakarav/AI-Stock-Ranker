@@ -8,7 +8,6 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # --- CONFIGURATION ---
-# Backup lists ensure the robot NEVER fails even if Wikipedia is down
 BACKUP_US = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "JPM", "V", "JNJ", "WMT", "PG", "MA", "UNH", "HD", "CVX", "MRK", "ABBV", "KO", "PEP", "BAC", "COST", "MCD", "DIS", "CSCO", "ACN", "NFLX", "LIN", "AMD"]
 BACKUP_UK = ["SHELL.L", "AZN.L", "HSBA.L", "ULVR.L", "BP.L", "DGE.L", "RIO.L", "BATS.L", "GLEN.L", "GSK.L", "REL.L", "LSEG.L", "VOD.L", "LLOY.L", "BARC.L", "NG.L", "PRU.L", "TSCO.L", "STAN.L", "RR.L"]
 INDIA_TICKERS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "MARUTI.NS", "AXISBANK.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "ASIANPAINT.NS", "KOTAKBANK.NS", "TATASTEEL.NS", "M&M.NS", "ADANIENT.NS", "ADANIPORTS.NS", "NTPC.NS", "ONGC.NS"]
@@ -20,45 +19,40 @@ def get_us_tickers():
         df = tables[0]
         return [t.replace('.', '-') for t in df['Symbol'].tolist()]
     except:
-        print("⚠️ US Scraper Failed. Using Backup List.")
         return BACKUP_US
 
 def get_uk_tickers():
     try:
         url = "https://en.wikipedia.org/wiki/FTSE_100_Index"
         tables = pd.read_html(url)
-        # Check tables 3 or 4 for tickers
         for i in range(3, 6):
             if 'Ticker' in tables[i].columns:
                 return [f"{t}.L" for t in tables[i]['Ticker'].tolist()]
-        raise Exception("Table not found")
+        return BACKUP_UK
     except: 
-        print("⚠️ UK Scraper Failed. Using Backup List.")
         return BACKUP_UK
 
 def get_india_tickers():
     return INDIA_TICKERS
 
-# --- SARIMA PREDICTION ---
+# --- SARIMA PREDICTION (FIXED) ---
 def run_sarima_forecast(history):
     try:
-        # Simplified Model for Speed: AR(1)
-        model = SARIMAX(history, order=(1, 1, 0)) 
+        # Using (1,1,1) for better trend detection
+        model = SARIMAX(history, order=(1, 1, 1)) 
         model_fit = model.fit(disp=False)
-        forecast = model_fit.forecast(steps=5) 
-        return round(forecast.iloc[-1], 2)
+        forecast = model_fit.forecast(steps=7) # Forecast 7 days out
+        return forecast.iloc[-1] # Return RAW float (No rounding yet!)
     except:
         return np.nan
 
 def analyze_market(tickers, region_name):
     print(f"🌍 Analyzing {region_name} Market ({len(tickers)} tickers)...")
     
-    if not tickers: 
-        print(f"❌ No tickers found for {region_name}")
-        return
+    if not tickers: return
 
     # 1. BATCH DOWNLOAD
-    data = yf.download(tickers, period="6mo", group_by='ticker', progress=False, threads=True)
+    data = yf.download(tickers, period="1y", group_by='ticker', progress=False, threads=True)
     
     candidates = []
 
@@ -66,19 +60,15 @@ def analyze_market(tickers, region_name):
     print("   > Screening Stocks...")
     for ticker in tickers:
         try:
-            # Handle Single Ticker vs Multi Ticker Structure
-            if len(tickers) == 1:
-                df = data
+            if len(tickers) == 1: df = data
             else:
                 if ticker not in data.columns.levels[0]: continue
                 df = data[ticker]
             
             if df.empty or len(df) < 50: continue
 
-            # Technicals
             close_price = float(df['Close'].iloc[-1])
             
-            # Fundamentals (Fetching individually)
             try:
                 stock = yf.Ticker(ticker)
                 info = stock.info
@@ -86,16 +76,22 @@ def analyze_market(tickers, region_name):
                 pb = info.get('priceToBook', 5)
                 rev_growth = info.get('revenueGrowth', 0)
             except:
-                pe, pb, rev_growth = 50, 5, 0 # Defaults
+                pe, pb, rev_growth = 50, 5, 0 
 
-            # --- BLEND SCORE ---
+            # --- BLEND SCORE (FIXED CLAMPING) ---
             score_pe = max(0, 100 - (pe * 2))
             score_pb = max(0, 100 - (pb * 15))
-            score_growth = min(100, (rev_growth * 100) * 3)
+            
+            # Fix: Ensure growth score never exceeds 100 even if data is crazy
+            raw_growth = (rev_growth * 100) * 3
+            score_growth = min(100, max(0, raw_growth))
             
             final_score = (score_pe * 0.4) + (score_pb * 0.3) + (score_growth * 0.3)
             
-            if final_score > 30: # Lower threshold to ensure we get results
+            # FINAL SAFETY CLAMP (0 to 100)
+            final_score = min(100, max(0, final_score))
+            
+            if final_score > 30: 
                 candidates.append({
                     "Ticker": ticker,
                     "Close": round(close_price, 2),
@@ -103,26 +99,27 @@ def analyze_market(tickers, region_name):
                     "Blend_Score": round(final_score, 1),
                     "History": df['Close']
                 })
-        except Exception as e: continue
+        except: continue
 
     # 3. RANKING
     df_candidates = pd.DataFrame(candidates)
-    if df_candidates.empty: 
-        print(f"⚠️ No candidates found for {region_name}")
-        return
+    if df_candidates.empty: return
 
     top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(10)
     
-    # 4. PREDICTION
+    # 4. PREDICTION (FIXED PRECISION)
     print(f"   > Running AI Prediction on top {len(top_picks)}...")
     predictions = []
     for index, row in top_picks.iterrows():
         pred_price = run_sarima_forecast(row['History'])
+        
         if pd.notna(pred_price):
+            # Calculate Upside with FULL PRECISION first
             upside = ((pred_price - row['Close']) / row['Close']) * 100
         else:
             upside = 0.0
-        predictions.append(round(upside, 2))
+            
+        predictions.append(round(upside, 2)) # Round ONLY at the end
     
     top_picks['SARIMA_Forecast_5D'] = predictions
     del top_picks['History']
@@ -132,7 +129,7 @@ def analyze_market(tickers, region_name):
     print(f"✅ Saved {filename}")
 
 def main():
-    print(" IronGate Global Engine Starting...")
+    print("🚀 IronGate Global Engine Starting...")
     analyze_market(get_us_tickers(), "US")
     analyze_market(get_india_tickers(), "IN")
     analyze_market(get_uk_tickers(), "UK")
