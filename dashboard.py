@@ -3,10 +3,8 @@ import pandas as pd
 import os
 from github import Github
 
-# PAGE CONFIG
-st.set_page_config(page_title="IronGate Global", layout="wide")
+st.set_page_config(page_title="IronGate Research", layout="wide")
 
-# CSS
 st.markdown("""
     <style>
     .block-container {padding-top: 1rem;}
@@ -14,49 +12,44 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# SIDEBAR (Keep your existing subscription code here if you want)
-st.sidebar.title("IronGate Global")
-st.sidebar.info("Markets: US | UK | INDIA")
+st.title("IRONGATE | EQUITY MONITOR")
+st.markdown("**GLOBAL SCREENER** | STRATEGY: `BLEND` + `SARIMA`")
 
-# HEADER
-st.title("IRONGATE | GLOBAL TERMINAL")
-st.markdown("**STRATEGY:** `VALUE_GROWTH_BLEND` + `SARIMA_FORECAST`")
-st.markdown("---")
+if st.button("SYNC DATA"):
+    st.rerun()
 
-def load_data(filename):
-    if os.path.exists(filename):
-        return pd.read_csv(filename)
-    return None
-
-# TABS FOR MARKETS
-tab1, tab2, tab3 = st.tabs(["🇺🇸 UNITED STATES", "🇮🇳 INDIA", "🇬🇧 UNITED KINGDOM"])
+tab1, tab2, tab3 = st.tabs(["🇺🇸 USA", "🇮🇳 INDIA", "🇬🇧 UK"])
 
 def render_tab(filename, currency):
-    df = load_data(filename)
-    if df is not None:
-        # Metrics
+    if not os.path.exists(filename):
+        st.warning("Data not available.")
+        return
+
+    try:
+        df = pd.read_csv(filename)
+        
+        # ERROR PREVENTION: Check if new columns exist
+        if 'Blend_Score' not in df.columns:
+            st.error("⚠️ Data Mismatch: This file is from the old version.")
+            st.info("The system is updating. Please wait for the next scheduled run.")
+            st.dataframe(df) # Show old data anyway
+            return
+
+        # Show New Metrics
         top = df.iloc[0]
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Top Pick", top['Ticker'])
         c2.metric("Blend Score", f"{top['Blend_Score']}/100")
-        c3.metric("Proj. Upside (5D)", f"{top['SARIMA_Forecast_5D']}%")
-        c4.metric("Valuation (P/E)", top['PE_Ratio'])
+        c3.metric("Proj. Upside", f"{top['SARIMA_Forecast_5D']}%")
+        c4.metric("Valuation", f"{top['PE_Ratio']} P/E")
         
-        # Color Logic for Forecast
         st.dataframe(
-            df.style.background_gradient(subset=['SARIMA_Forecast_5D'], cmap='RdYlGn'),
-            use_container_width=True,
-            hide_index=True
+            df.style.background_gradient(subset=['Blend_Score'], cmap='Greens'),
+            use_container_width=True, hide_index=True
         )
-    else:
-        st.warning("Awaiting Market Data...")
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
 
-with tab1:
-    render_tab("US_rankings.csv", "$")
-with tab2:
-    render_tab("IN_rankings.csv", "₹")
-with tab3:
-    render_tab("UK_rankings.csv", "£")
-
-st.markdown("---")
-st.caption("CONFIDENTIAL: IronGate Global Research. SARIMA Models are probabilistic, not guaranteed.")
+with tab1: render_tab("US_rankings.csv", "$")
+with tab2: render_tab("IN_rankings.csv", "₹")
+with tab3: render_tab("UK_rankings.csv", "£")
