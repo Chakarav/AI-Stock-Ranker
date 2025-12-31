@@ -6,107 +6,79 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
-# CONFIGURATION
+# CONFIG (Same as before)
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465 
 SENDER = "vishwajeetchakaravarthi@gmail.com"
+# LOAD SUBSCRIBERS
 try:
     subs_df = pd.read_csv("subscribers.csv")
     RECEIVERS = subs_df['email'].dropna().unique().tolist()
-    print(f"Loaded {len(RECEIVERS)} subscribers.")
 except:
     RECEIVERS = ["vishwajeetchakaravarthi@gmail.com"]
+
 DASHBOARD_URL = "https://ai-stock-ranker-jmt6zuxodyrhsbrbgo7dck.streamlit.app"
 
 def send_email():
-    print(">> INITIATING IRONGATE TRANSMISSION PROTOCOL...")
+    print("📠 Generating Global Brief...")
     
-    # Auth
     raw_pass = os.environ.get("EMAIL_PASSWORD") or os.environ.get("APP_PASSWORD")
     if not raw_pass: exit(1)
     password = raw_pass.replace(" ", "").strip()
 
-    # Find Files
-    files = glob.glob("*_rankings.csv")
-    if not files: return
-
-    # Build Email Body
     email_html_body = ""
-    for filename in files:
-        try:
-            df = pd.read_csv(filename)
-            region_name = filename.split("_")[0] 
-            
-            # Select Institutional Columns
-            cols = [c for c in ['Ticker', 'Close', 'Alpha_Score', 'PE_Ratio', 'Margins'] if c in df.columns]
-            top_picks = df[cols].head(5)
-            
-            # Formatting
-            if 'Close' in top_picks.columns: top_picks['Close'] = top_picks['Close'].round(2)
-            if 'Margins' in top_picks.columns: top_picks['Margins'] = top_picks['Margins'].round(1)
-            
-            # TABLE STYLE: Monospace "Terminal" Look
-            table_html = top_picks.to_html(index=False, border=0)
-            table_html = table_html.replace('class="dataframe"', 'style="width: 100%; border-collapse: collapse; font-family: \'Courier New\', monospace; font-size: 12px; color: #333;"')
-            table_html = table_html.replace('<th>', '<th style="text-align: right; padding: 8px 4px; border-bottom: 2px solid #000; text-transform: uppercase; font-weight: bold;">')
-            table_html = table_html.replace('<td>', '<td style="text-align: right; padding: 6px 4px; border-bottom: 1px solid #ddd;">')
-            table_html = table_html.replace('text-align: right;">Ticker', 'text-align: left;">Ticker') 
-            
-            email_html_body += f"""
-            <div style="margin-bottom: 35px;">
-                <h3 style="font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #000; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; border-left: 4px solid #000; padding-left: 12px;">
-                    {region_name} / EQUITY_MONITOR
-                </h3>
-                {table_html}
-            </div>
-            """
-        except: continue
+    
+    # Process all 3 regions
+    for region in ["US", "IN", "UK"]:
+        filename = f"{region}_rankings.csv"
+        if os.path.exists(filename):
+            try:
+                df = pd.read_csv(filename)
+                
+                # Format Table
+                cols = ['Ticker', 'Close', 'Blend_Score', 'SARIMA_Forecast_5D', 'PE_Ratio']
+                display_df = df[cols].head(10) # TOP 10
+                
+                table_html = display_df.to_html(index=False, border=0)
+                # Institutional Styling
+                table_html = table_html.replace('class="dataframe"', 'style="width: 100%; border-collapse: collapse; font-family: \'Courier New\', monospace; font-size: 12px;"')
+                table_html = table_html.replace('<th>', '<th style="text-align: right; padding: 4px; border-bottom: 2px solid #000; background: #f0f0f0;">')
+                table_html = table_html.replace('<td>', '<td style="text-align: right; padding: 4px; border-bottom: 1px solid #ddd;">')
+                
+                email_html_body += f"""
+                <div style="margin-bottom: 25px;">
+                    <h3 style="font-family: Arial; border-left: 4px solid #000; padding-left: 10px;">
+                        {region} MARKET / TOP 10
+                    </h3>
+                    {table_html}
+                </div>
+                """
+            except: continue
 
-    # COMPOSE FINAL EMAIL
+    # EMAIL TEMPLATE
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"IRONGATE: {datetime.now().strftime('%Y-%m-%d').upper()} BRIEF"
+    msg["Subject"] = f"IRONGATE GLOBAL: {datetime.now().strftime('%d %b')}"
     msg["From"] = "IronGate Research"
     msg["To"] = ", ".join(RECEIVERS)
     
     final_html = f"""
     <html>
-      <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #111; max-width: 680px; margin: auto; background-color: #ffffff;">
-        
-        <div style="padding-bottom: 20px; border-bottom: 4px solid #000; margin-bottom: 40px;">
-            <h1 style="font-size: 26px; font-weight: 800; letter-spacing: -1px; margin: 0; color: #000; text-transform: uppercase;">IRONGATE <span style="color: #555;">RESEARCH</span></h1>
-            <div style="display: flex; justify-content: space-between; margin-top: 8px; border-top: 1px solid #ccc; padding-top: 8px;">
-                <span style="font-size: 10px; font-family: 'Courier New', monospace; color: #555;">UNIT: QUANT_STRATEGY</span>
-                <span style="font-size: 10px; font-family: 'Courier New', monospace; color: #555;">DATE: {datetime.now().strftime('%Y.%m.%d')}</span>
-            </div>
-        </div>
-
+      <body style="font-family: Arial, sans-serif; color: #000; max-width: 800px;">
+        <h2 style="letter-spacing: -1px;">IRONGATE <span style="color:#666">GLOBAL</span></h2>
+        <p>STRATEGY: BLEND (Value+Growth) | MODEL: SARIMA (5-Day Forecast)</p>
+        <hr style="border: 1px solid #000;">
         {email_html_body}
-        
-        <div style="margin-top: 50px; text-align: left; background-color: #f4f4f4; padding: 20px;">
-            <p style="font-size: 11px; font-family: sans-serif; margin-bottom: 15px; color: #666;">Full valuation metrics and historical performance data available on the terminal.</p>
-            <a href="{DASHBOARD_URL}" 
-               style="font-family: 'Courier New', monospace; background-color: #000; color: #fff; padding: 12px 25px; 
-                      text-decoration: none; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
-               > ACCESS_TERMINAL
-            </a>
-        </div>
-        
-        <div style="margin-top: 60px; border-top: 1px solid #eee; padding-top: 20px; font-size: 9px; color: #999; font-family: sans-serif; line-height: 1.5; text-align: justify;">
-            <p><strong>CONFIDENTIALITY NOTICE:</strong> The contents of this transmission are proprietary to IronGate Research. Generated by Quant Engine V4.1.</p>
-        </div>
+        <br>
+        <a href="{DASHBOARD_URL}" style="background:#000; color:#fff; padding:10px 20px; text-decoration:none;">OPEN TERMINAL</a>
       </body>
     </html>
     """
     msg.attach(MIMEText(final_html, "html"))
 
-    # SEND
     server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
     server.login(SENDER, password)
     server.sendmail(SENDER, RECEIVERS, msg.as_string())
     server.quit()
-    print(">> TRANSMISSION COMPLETE.")
 
 if __name__ == "__main__":
     send_email()
-
-
