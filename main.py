@@ -2,132 +2,148 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import requests
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+import warnings
+
+# Suppress warnings for cleaner logs
+warnings.filterwarnings("ignore")
 
 # --- CONFIGURATION ---
-US_TICKER_SOURCE = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-# Using a reliable Nifty 50 CSV source (or you can use a fixed list if this link breaks)
-INDIA_TICKER_SOURCE = "https://archives.nseindia.com/content/indices/ind_nifty50list.csv"
+US_SOURCE = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+UK_SOURCE = "https://en.wikipedia.org/wiki/FTSE_100_Index"
+# Nifty 50 Fallback list (Reliable)
+INDIA_TICKERS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "MARUTI.NS", "AXISBANK.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "ASIANPAINT.NS", "KOTAKBANK.NS", "TATASTEEL.NS"]
 
 def get_us_tickers():
-    """Scrapes S&P 500 tickers from Wikipedia"""
     try:
-        tables = pd.read_html(US_TICKER_SOURCE)
-        df = tables[0]
-        tickers = df['Symbol'].tolist()
-        # Clean tickers (Change BRK.B to BRK-B for Yahoo)
-        tickers = [t.replace('.', '-') for t in tickers]
-        return tickers
-    except Exception as e:
-        print(f"Error fetching US tickers: {e}")
-        return []
+        table = pd.read_html(US_SOURCE)[0]
+        return [t.replace('.', '-') for t in table['Symbol'].tolist()]
+    except: return []
+
+def get_uk_tickers():
+    try:
+        # FTSE 100 tickers usually need '.L' for Yahoo Finance
+        table = pd.read_html(UK_SOURCE)[4] # Table index varies, usually 3 or 4
+        # Fallback if table fetch fails or structure changes
+        if 'Ticker' not in table.columns:
+            table = pd.read_html(UK_SOURCE)[3]
+        
+        tickers = table['Ticker'].tolist()
+        return [f"{t}.L" for t in tickers]
+    except: 
+        print("⚠️ Used Fallback UK List")
+        return ["HSBA.L", "SHEL.L", "AZN.L", "BP.L", "ULVR.L", "RIO.L", "GSK.L", "DGE.L", "BATS.L", "GLEN.L"]
 
 def get_india_tickers():
-    """Fetches Nifty 50 tickers and adds .NS suffix"""
-    try:
-        # NSE blocks scripts, so we use a standard header or fallback to a hardcoded list if needed
-        # For stability in GitHub Actions, we often use a hardcoded list or a mirror. 
-        # Here is a robust fallback method using a direct list if scraping fails.
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(INDIA_TICKER_SOURCE, headers=headers)
-        
-        if response.status_code == 200:
-            df = pd.read_csv(INDIA_TICKER_SOURCE)
-            tickers = df['Symbol'].tolist()
-            return [f"{t}.NS" for t in tickers]
-        else:
-            raise Exception("NSE Connection Failed")
-    except:
-        # FALLBACK LIST (Top 10-15 weights) to ensure it never fails entirely
-        print("⚠️ Used Fallback Nifty List")
-        return ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", 
-                "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS"]
+    return INDIA_TICKERS
 
-def calculate_rsi(series, period=14):
-    """Calculates Relative Strength Index (RSI)"""
-    delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+# --- SARIMA PREDICTION MODEL ---
+def run_sarima_forecast(history):
+    """
+    Runs a simplified SARIMA model on the last 6 months of data.
+    Returns the predicted price for the next trading day.
+    """
+    try:
+        # We use a fixed order (1,1,1) to keep it fast for GitHub Actions
+        # A full auto_arima search would take hours for 20 stocks.
+        model = SARIMAX(history, order=(1, 1, 1), seasonal_order=(0, 0, 0, 0))
+        model_fit = model.fit(disp=False)
+        forecast = model_fit.forecast(steps=5) # Predict next 5 days
+        return round(forecast.iloc[-1], 2) # Return the 5-day target
+    except:
+        return np.nan
 
 def analyze_market(tickers, region_name):
-    print(f"🔄 Analyzing {region_name} Market ({len(tickers)} tickers)...")
+    print(f"🌍 Analyzing {region_name} Market...")
     
-    if not tickers:
-        return
+    if not tickers: return
 
-    # 1. BATCH DOWNLOAD DATA (Faster than looping)
-    data = yf.download(tickers, period="6mo", group_by='ticker', progress=False)
+    # 1. BATCH DOWNLOAD (1 Year data for SARIMA)
+    data = yf.download(tickers, period="1y", group_by='ticker', progress=False)
     
-    results = []
+    candidates = []
 
+    # 2. SCREENING PHASE (The "Blend" Strategy)
+    print("   > Running Fundamental & Technical Screen...")
     for ticker in tickers:
         try:
-            # Extract DataFrame for single ticker
             df = data[ticker]
-            
-            # Check if data exists
-            if df.empty or len(df) < 20:
-                continue
+            if df.empty or len(df) < 50: continue
 
-            # 2. CALCULATE TECHNICALS
-            current_close = df['Close'].iloc[-1]
-            df['RSI'] = calculate_rsi(df['Close'])
-            current_rsi = df['RSI'].iloc[-1]
+            # Technicals
+            close_price = df['Close'].iloc[-1]
             
-            # 3. GET FUNDAMENTALS (Note: This is slow, so we do it only for valid stocks)
-            # Optimization: In a real "Speed" scenario, we might skip this or fetch in bulk.
-            # For this project, we fetch info individually.
+            # Fundamentals (Fetching individually is slow, but necessary for P/B & Revenue)
+            # To speed up, we accept that some fields might be missing
             stock = yf.Ticker(ticker)
             info = stock.info
             
-            pe_ratio = info.get('trailingPE', 999) # Default to high if missing
-            margins = info.get('profitMargins', 0)
+            pe = info.get('trailingPE', 100) # High default = bad
+            pb = info.get('priceToBook', 10) # High default = bad
+            eps = info.get('trailingEps', 0)
+            rev_growth = info.get('revenueGrowth', 0)
             
-            # 4. ALPHA SCORE LOGIC (The "Secret Sauce")
-            # Criteria: 
-            # - Low RSI (Oversold) -> Higher Score
-            # - Low PE (Cheap) -> Higher Score
-            # - High Margins (Quality) -> Higher Score
+            # --- BLEND SCORE LOGIC ---
+            # Value: Low PE (<25 is good), Low PB (<3 is good)
+            # Growth: High Rev Growth, Positive EPS
             
-            rsi_score = max(0, (70 - current_rsi)) # Higher if RSI is low
-            pe_score = max(0, (50 - pe_ratio))     # Higher if PE is low
-            margin_score = margins * 100           # Higher % is better
+            # Score 0-100 (Higher is better)
+            score_pe = max(0, 100 - (pe * 2))      # PE 20 = 60pts, PE 50 = 0pts
+            score_pb = max(0, 100 - (pb * 10))     # PB 2 = 80pts, PB 10 = 0pts
+            score_growth = min(100, (rev_growth * 100) * 2) # 10% growth = 20pts
             
-            alpha_score = (rsi_score * 0.4) + (pe_score * 0.3) + (margin_score * 0.3)
+            final_score = (score_pe * 0.4) + (score_pb * 0.3) + (score_growth * 0.3)
             
-            results.append({
-                "Ticker": ticker,
-                "Close": round(current_close, 2),
-                "RSI": round(current_rsi, 2),
-                "PE_Ratio": round(pe_ratio, 2),
-                "Margins": round(margins * 100, 1),
-                "Alpha_Score": round(alpha_score, 1)
-            })
-            
-        except Exception:
-            continue
+            # Basic Filter: Only keep "decent" stocks to run SARIMA on
+            if final_score > 40:
+                candidates.append({
+                    "Ticker": ticker,
+                    "Close": float(close_price),
+                    "PE_Ratio": round(pe, 2),
+                    "PB_Ratio": round(pb, 2),
+                    "Rev_Growth": round(rev_growth * 100, 1),
+                    "Blend_Score": round(final_score, 1),
+                    "History": df['Close'] # Keep history for SARIMA
+                })
+                
+        except: continue
 
-    # 5. SORT & SAVE
-    if results:
-        final_df = pd.DataFrame(results)
-        final_df = final_df.sort_values(by="Alpha_Score", ascending=False)
-        filename = f"{region_name}_rankings.csv"
-        final_df.to_csv(filename, index=False)
-        print(f"✅ Saved {filename} with {len(final_df)} stocks.")
+    # 3. RANKING & SELECTION
+    df_candidates = pd.DataFrame(candidates)
+    if df_candidates.empty: return
+
+    # Sort by Blend Score and take Top 15 Finalists
+    top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(15)
+    
+    # 4. PREDICTION PHASE (SARIMA)
+    print(f"   > Running SARIMA AI Models on top {len(top_picks)} picks...")
+    
+    predictions = []
+    for index, row in top_picks.iterrows():
+        # Run heavy math only on finalists
+        predicted_price = run_sarima_forecast(row['History'])
+        upside = ((predicted_price - row['Close']) / row['Close']) * 100
+        
+        predictions.append(round(upside, 2))
+    
+    top_picks['SARIMA_Forecast_5D'] = predictions
+    
+    # Final cleanup (Remove history column to save CSV space)
+    del top_picks['History']
+    
+    # Save Top 10
+    filename = f"{region_name}_rankings.csv"
+    top_picks.head(10).to_csv(filename, index=False)
+    print(f"✅ Saved Top 10 for {region_name} to {filename}")
 
 def main():
-    print("🚀 IronGate Engine Starting...")
+    print("🚀 IronGate Global Engine Starting...")
     
-    # Run US Market
-    us_tickers = get_us_tickers()
-    analyze_market(us_tickers, "US")
+    analyze_market(get_us_tickers(), "US")
+    analyze_market(get_india_tickers(), "IN")
+    analyze_market(get_uk_tickers(), "UK")
     
-    # Run India Market
-    india_tickers = get_india_tickers()
-    analyze_market(india_tickers, "IN")
-    
-    print("🏁 Analysis Complete.")
+    print("🏁 Global Analysis Complete.")
 
 if __name__ == "__main__":
     main()
