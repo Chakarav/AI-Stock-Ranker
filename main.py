@@ -8,6 +8,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # --- CONFIGURATION ---
+# Backup lists ensure the robot NEVER fails even if Wikipedia is down
 BACKUP_US = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "JPM", "V", "JNJ", "WMT", "PG", "MA", "UNH", "HD", "CVX", "MRK", "ABBV", "KO", "PEP", "BAC", "COST", "MCD", "DIS", "CSCO", "ACN", "NFLX", "LIN", "AMD"]
 BACKUP_UK = ["SHELL.L", "AZN.L", "HSBA.L", "ULVR.L", "BP.L", "DGE.L", "RIO.L", "BATS.L", "GLEN.L", "GSK.L", "REL.L", "LSEG.L", "VOD.L", "LLOY.L", "BARC.L", "NG.L", "PRU.L", "TSCO.L", "STAN.L", "RR.L"]
 INDIA_TICKERS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "MARUTI.NS", "AXISBANK.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "ASIANPAINT.NS", "KOTAKBANK.NS", "TATASTEEL.NS", "M&M.NS", "ADANIENT.NS", "ADANIPORTS.NS", "NTPC.NS", "ONGC.NS"]
@@ -35,10 +36,10 @@ def get_uk_tickers():
 def get_india_tickers():
     return INDIA_TICKERS
 
-# --- SARIMA PREDICTION (FIXED) ---
+# --- SARIMA PREDICTION ---
 def run_sarima_forecast(history):
     try:
-        # Using (1,1,1) for better trend detection
+        # Using (1,1,1) order for best balance of speed vs accuracy
         model = SARIMAX(history, order=(1, 1, 1)) 
         model_fit = model.fit(disp=False)
         forecast = model_fit.forecast(steps=7) # Forecast 7 days out
@@ -78,17 +79,23 @@ def analyze_market(tickers, region_name):
             except:
                 pe, pb, rev_growth = 50, 5, 0 
 
-            # --- BLEND SCORE (FIXED CLAMPING) ---
-            score_pe = max(0, 100 - (pe * 2))
-            score_pb = max(0, 100 - (pb * 15))
+            # --- BLEND SCORE LOGIC (STRICT) ---
             
-            # Fix: Ensure growth score never exceeds 100 even if data is crazy
+            # 1. PE Score: Higher is better (Max 100 if PE is 0, 0 if PE is >50)
+            score_pe = max(0, 100 - (pe * 2))
+            
+            # 2. PB Score: Higher is better (Max 100 if PB is 0, 0 if PB is >15)
+            score_pb = max(0, 100 - (pb * 6)) 
+            
+            # 3. Growth Score: STRICT CAP applied!
+            # Even if growth is 500%, score is capped at 100.
             raw_growth = (rev_growth * 100) * 3
             score_growth = min(100, max(0, raw_growth))
             
+            # Weighted Average
             final_score = (score_pe * 0.4) + (score_pb * 0.3) + (score_growth * 0.3)
             
-            # FINAL SAFETY CLAMP (0 to 100)
+            # Final Safety Clamp (Just in case)
             final_score = min(100, max(0, final_score))
             
             if final_score > 30: 
@@ -105,35 +112,4 @@ def analyze_market(tickers, region_name):
     df_candidates = pd.DataFrame(candidates)
     if df_candidates.empty: return
 
-    top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(10)
-    
-    # 4. PREDICTION (FIXED PRECISION)
-    print(f"   > Running AI Prediction on top {len(top_picks)}...")
-    predictions = []
-    for index, row in top_picks.iterrows():
-        pred_price = run_sarima_forecast(row['History'])
-        
-        if pd.notna(pred_price):
-            # Calculate Upside with FULL PRECISION first
-            upside = ((pred_price - row['Close']) / row['Close']) * 100
-        else:
-            upside = 0.0
-            
-        predictions.append(round(upside, 2)) # Round ONLY at the end
-    
-    top_picks['SARIMA_Forecast_5D'] = predictions
-    del top_picks['History']
-    
-    filename = f"{region_name}_rankings.csv"
-    top_picks.to_csv(filename, index=False)
-    print(f"✅ Saved {filename}")
-
-def main():
-    print("🚀 IronGate Global Engine Starting...")
-    analyze_market(get_us_tickers(), "US")
-    analyze_market(get_india_tickers(), "IN")
-    analyze_market(get_uk_tickers(), "UK")
-    print("🏁 Analysis Complete.")
-
-if __name__ == "__main__":
-    main()
+    top_picks = df_candidates.sort_values(by="
