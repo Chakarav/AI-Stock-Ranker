@@ -5,145 +5,138 @@ import requests
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 import warnings
 
-# Suppress warnings for cleaner logs
 warnings.filterwarnings("ignore")
 
 # --- CONFIGURATION ---
-US_SOURCE = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-UK_SOURCE = "https://en.wikipedia.org/wiki/FTSE_100_Index"
-# Nifty 50 Fallback list (Reliable)
-INDIA_TICKERS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "MARUTI.NS", "AXISBANK.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "ASIANPAINT.NS", "KOTAKBANK.NS", "TATASTEEL.NS"]
+# Backup lists ensure the robot NEVER fails even if Wikipedia is down
+BACKUP_US = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "JPM", "V", "JNJ", "WMT", "PG", "MA", "UNH", "HD", "CVX", "MRK", "ABBV", "KO", "PEP", "BAC", "COST", "MCD", "DIS", "CSCO", "ACN", "NFLX", "LIN", "AMD"]
+BACKUP_UK = ["SHELL.L", "AZN.L", "HSBA.L", "ULVR.L", "BP.L", "DGE.L", "RIO.L", "BATS.L", "GLEN.L", "GSK.L", "REL.L", "LSEG.L", "VOD.L", "LLOY.L", "BARC.L", "NG.L", "PRU.L", "TSCO.L", "STAN.L", "RR.L"]
+INDIA_TICKERS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "MARUTI.NS", "AXISBANK.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "ASIANPAINT.NS", "KOTAKBANK.NS", "TATASTEEL.NS", "M&M.NS", "ADANIENT.NS", "ADANIPORTS.NS", "NTPC.NS", "ONGC.NS"]
 
 def get_us_tickers():
     try:
-        table = pd.read_html(US_SOURCE)[0]
-        return [t.replace('.', '-') for t in table['Symbol'].tolist()]
-    except: return []
+        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+        tables = pd.read_html(url)
+        df = tables[0]
+        return [t.replace('.', '-') for t in df['Symbol'].tolist()]
+    except:
+        print("⚠️ US Scraper Failed. Using Backup List.")
+        return BACKUP_US
 
 def get_uk_tickers():
     try:
-        # FTSE 100 tickers usually need '.L' for Yahoo Finance
-        table = pd.read_html(UK_SOURCE)[4] # Table index varies, usually 3 or 4
-        # Fallback if table fetch fails or structure changes
-        if 'Ticker' not in table.columns:
-            table = pd.read_html(UK_SOURCE)[3]
-        
-        tickers = table['Ticker'].tolist()
-        return [f"{t}.L" for t in tickers]
+        url = "https://en.wikipedia.org/wiki/FTSE_100_Index"
+        tables = pd.read_html(url)
+        # Check tables 3 or 4 for tickers
+        for i in range(3, 6):
+            if 'Ticker' in tables[i].columns:
+                return [f"{t}.L" for t in tables[i]['Ticker'].tolist()]
+        raise Exception("Table not found")
     except: 
-        print("⚠️ Used Fallback UK List")
-        return ["HSBA.L", "SHEL.L", "AZN.L", "BP.L", "ULVR.L", "RIO.L", "GSK.L", "DGE.L", "BATS.L", "GLEN.L"]
+        print("⚠️ UK Scraper Failed. Using Backup List.")
+        return BACKUP_UK
 
 def get_india_tickers():
     return INDIA_TICKERS
 
-# --- SARIMA PREDICTION MODEL ---
+# --- SARIMA PREDICTION ---
 def run_sarima_forecast(history):
-    """
-    Runs a simplified SARIMA model on the last 6 months of data.
-    Returns the predicted price for the next trading day.
-    """
     try:
-        # We use a fixed order (1,1,1) to keep it fast for GitHub Actions
-        # A full auto_arima search would take hours for 20 stocks.
-        model = SARIMAX(history, order=(1, 1, 1), seasonal_order=(0, 0, 0, 0))
+        # Simplified Model for Speed: AR(1)
+        model = SARIMAX(history, order=(1, 1, 0)) 
         model_fit = model.fit(disp=False)
-        forecast = model_fit.forecast(steps=5) # Predict next 5 days
-        return round(forecast.iloc[-1], 2) # Return the 5-day target
+        forecast = model_fit.forecast(steps=5) 
+        return round(forecast.iloc[-1], 2)
     except:
         return np.nan
 
 def analyze_market(tickers, region_name):
-    print(f"🌍 Analyzing {region_name} Market...")
+    print(f"🌍 Analyzing {region_name} Market ({len(tickers)} tickers)...")
     
-    if not tickers: return
+    if not tickers: 
+        print(f"❌ No tickers found for {region_name}")
+        return
 
-    # 1. BATCH DOWNLOAD (1 Year data for SARIMA)
-    data = yf.download(tickers, period="1y", group_by='ticker', progress=False)
+    # 1. BATCH DOWNLOAD
+    data = yf.download(tickers, period="6mo", group_by='ticker', progress=False, threads=True)
     
     candidates = []
 
-    # 2. SCREENING PHASE (The "Blend" Strategy)
-    print("   > Running Fundamental & Technical Screen...")
+    # 2. SCREENING
+    print("   > Screening Stocks...")
     for ticker in tickers:
         try:
-            df = data[ticker]
+            # Handle Single Ticker vs Multi Ticker Structure
+            if len(tickers) == 1:
+                df = data
+            else:
+                if ticker not in data.columns.levels[0]: continue
+                df = data[ticker]
+            
             if df.empty or len(df) < 50: continue
 
             # Technicals
-            close_price = df['Close'].iloc[-1]
+            close_price = float(df['Close'].iloc[-1])
             
-            # Fundamentals (Fetching individually is slow, but necessary for P/B & Revenue)
-            # To speed up, we accept that some fields might be missing
-            stock = yf.Ticker(ticker)
-            info = stock.info
-            
-            pe = info.get('trailingPE', 100) # High default = bad
-            pb = info.get('priceToBook', 10) # High default = bad
-            eps = info.get('trailingEps', 0)
-            rev_growth = info.get('revenueGrowth', 0)
-            
-            # --- BLEND SCORE LOGIC ---
-            # Value: Low PE (<25 is good), Low PB (<3 is good)
-            # Growth: High Rev Growth, Positive EPS
-            
-            # Score 0-100 (Higher is better)
-            score_pe = max(0, 100 - (pe * 2))      # PE 20 = 60pts, PE 50 = 0pts
-            score_pb = max(0, 100 - (pb * 10))     # PB 2 = 80pts, PB 10 = 0pts
-            score_growth = min(100, (rev_growth * 100) * 2) # 10% growth = 20pts
+            # Fundamentals (Fetching individually)
+            try:
+                stock = yf.Ticker(ticker)
+                info = stock.info
+                pe = info.get('trailingPE', 50) 
+                pb = info.get('priceToBook', 5)
+                rev_growth = info.get('revenueGrowth', 0)
+            except:
+                pe, pb, rev_growth = 50, 5, 0 # Defaults
+
+            # --- BLEND SCORE ---
+            score_pe = max(0, 100 - (pe * 2))
+            score_pb = max(0, 100 - (pb * 15))
+            score_growth = min(100, (rev_growth * 100) * 3)
             
             final_score = (score_pe * 0.4) + (score_pb * 0.3) + (score_growth * 0.3)
             
-            # Basic Filter: Only keep "decent" stocks to run SARIMA on
-            if final_score > 40:
+            if final_score > 30: # Lower threshold to ensure we get results
                 candidates.append({
                     "Ticker": ticker,
-                    "Close": float(close_price),
+                    "Close": round(close_price, 2),
                     "PE_Ratio": round(pe, 2),
-                    "PB_Ratio": round(pb, 2),
-                    "Rev_Growth": round(rev_growth * 100, 1),
                     "Blend_Score": round(final_score, 1),
-                    "History": df['Close'] # Keep history for SARIMA
+                    "History": df['Close']
                 })
-                
-        except: continue
+        except Exception as e: continue
 
-    # 3. RANKING & SELECTION
+    # 3. RANKING
     df_candidates = pd.DataFrame(candidates)
-    if df_candidates.empty: return
+    if df_candidates.empty: 
+        print(f"⚠️ No candidates found for {region_name}")
+        return
 
-    # Sort by Blend Score and take Top 15 Finalists
-    top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(15)
+    top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(10)
     
-    # 4. PREDICTION PHASE (SARIMA)
-    print(f"   > Running SARIMA AI Models on top {len(top_picks)} picks...")
-    
+    # 4. PREDICTION
+    print(f"   > Running AI Prediction on top {len(top_picks)}...")
     predictions = []
     for index, row in top_picks.iterrows():
-        # Run heavy math only on finalists
-        predicted_price = run_sarima_forecast(row['History'])
-        upside = ((predicted_price - row['Close']) / row['Close']) * 100
-        
+        pred_price = run_sarima_forecast(row['History'])
+        if pd.notna(pred_price):
+            upside = ((pred_price - row['Close']) / row['Close']) * 100
+        else:
+            upside = 0.0
         predictions.append(round(upside, 2))
     
     top_picks['SARIMA_Forecast_5D'] = predictions
-    
-    # Final cleanup (Remove history column to save CSV space)
     del top_picks['History']
     
-    # Save Top 10
     filename = f"{region_name}_rankings.csv"
-    top_picks.head(10).to_csv(filename, index=False)
-    print(f"✅ Saved Top 10 for {region_name} to {filename}")
+    top_picks.to_csv(filename, index=False)
+    print(f"✅ Saved {filename}")
 
 def main():
-    print("🚀 IronGate Global Engine Starting...")
-    
+    print(" IronGate Global Engine Starting...")
     analyze_market(get_us_tickers(), "US")
     analyze_market(get_india_tickers(), "IN")
     analyze_market(get_uk_tickers(), "UK")
-    
-    print("🏁 Global Analysis Complete.")
+    print("🏁 Analysis Complete.")
 
 if __name__ == "__main__":
     main()
