@@ -7,11 +7,11 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-# --- CONFIGURATION ---
-# Backup lists ensure the robot NEVER fails even if Wikipedia is down
+# --- CONFIGURATION & BACKUPS ---
+# Backup lists are ONLY used if live scraping fails
 BACKUP_US = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "JPM", "V", "JNJ", "WMT", "PG", "MA", "UNH", "HD", "CVX", "MRK", "ABBV", "KO", "PEP", "BAC", "COST", "MCD", "DIS", "CSCO", "ACN", "NFLX", "LIN", "AMD"]
 BACKUP_UK = ["SHELL.L", "AZN.L", "HSBA.L", "ULVR.L", "BP.L", "DGE.L", "RIO.L", "BATS.L", "GLEN.L", "GSK.L", "REL.L", "LSEG.L", "VOD.L", "LLOY.L", "BARC.L", "NG.L", "PRU.L", "TSCO.L", "STAN.L", "RR.L"]
-INDIA_TICKERS = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "MARUTI.NS", "AXISBANK.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "ASIANPAINT.NS", "KOTAKBANK.NS", "TATASTEEL.NS", "M&M.NS", "ADANIENT.NS", "ADANIPORTS.NS", "NTPC.NS", "ONGC.NS"]
+BACKUP_INDIA = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "MARUTI.NS", "AXISBANK.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "ASIANPAINT.NS", "KOTAKBANK.NS", "TATASTEEL.NS", "M&M.NS", "ADANIENT.NS", "ADANIPORTS.NS", "NTPC.NS", "ONGC.NS"]
 
 def get_us_tickers():
     try:
@@ -34,16 +34,28 @@ def get_uk_tickers():
         return BACKUP_UK
 
 def get_india_tickers():
-    return INDIA_TICKERS
+    try:
+        # LIVE SCRAPING: Nifty 50 from Wikipedia
+        url = "https://en.wikipedia.org/wiki/NIFTY_50"
+        tables = pd.read_html(url)
+        # The ticker table is usually the 1st or 2nd one
+        df = tables[1] 
+        if 'Symbol' not in df.columns:
+            df = tables[2] # Fallback if table index shifts
+            
+        tickers = df['Symbol'].tolist()
+        return [f"{t}.NS" for t in tickers]
+    except:
+        print("⚠️ India Scrape Failed. Using Backup List.")
+        return BACKUP_INDIA
 
 # --- SARIMA PREDICTION ---
 def run_sarima_forecast(history):
     try:
-        # Using (1,1,1) order for best balance of speed vs accuracy
         model = SARIMAX(history, order=(1, 1, 1)) 
         model_fit = model.fit(disp=False)
-        forecast = model_fit.forecast(steps=7) # Forecast 7 days out
-        return forecast.iloc[-1] # Return RAW float (No rounding yet!)
+        forecast = model_fit.forecast(steps=7)
+        return forecast.iloc[-1]
     except:
         return np.nan
 
@@ -74,28 +86,19 @@ def analyze_market(tickers, region_name):
             except:
                 pe, pb, rev_growth = 50, 5, 0 
 
-            # --- DEBUGGING THE SCORE ---
-            # 1. PE Score (Max 100)
+            # --- BLEND SCORE LOGIC (FIXED) ---
             score_pe = max(0, 100 - (pe * 2))
-            
-            # 2. PB Score (Max 100)
             score_pb = max(0, 100 - (pb * 6)) 
             
-            # 3. Growth Score (STRICT CAP)
-            # We calculate raw growth first, then FORCE it to be 0-100
-            raw_growth_points = (rev_growth * 100) * 3
-            score_growth = min(100, max(0, raw_growth_points)) 
+            # STRICT CAP: Growth score can NEVER exceed 100
+            raw_growth = (rev_growth * 100) * 3
+            score_growth = min(100, max(0, raw_growth)) 
             
-            # Weighted Average
             final_score = (score_pe * 0.4) + (score_pb * 0.3) + (score_growth * 0.3)
             
-            # Final Safety Clamp
+            # Final Safety Clamp (0-100)
             final_score = min(100, max(0, final_score))
             
-            # PRINT DEBUG INFO FOR MCDONALDS ONLY
-            if ticker == "MCD":
-                print(f"🍔 MCD DEBUG: PE={pe} (Score {score_pe}) | Growth={rev_growth} (Score {score_growth}) | FINAL={final_score}")
-
             if final_score > 30: 
                 candidates.append({
                     "Ticker": ticker,
@@ -106,8 +109,7 @@ def analyze_market(tickers, region_name):
                 })
         except: continue
 
-    # ... (Rest of the function remains the same: Ranking & SARIMA) ...
-    # Be sure to include the Ranking and Saving logic here as before!
+    # RANKING & SAVING
     df_candidates = pd.DataFrame(candidates)
     if not df_candidates.empty:
         top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(10)
@@ -124,9 +126,11 @@ def analyze_market(tickers, region_name):
         top_picks['SARIMA_Forecast_5D'] = predictions
         del top_picks['History']
         
-        filename = f"{region_name}_rankings.csv"
+        # --- NEW FILENAME TO BREAK ZOMBIE LOOP ---
+        filename = f"{region_name}_Market_Data.csv"
+        
         top_picks.to_csv(filename, index=False)
-        print(f"✅ Saved {filename}")
+        print(f"✅ Saved New Data: {filename}")
 
 def main():
     print("🚀 IronGate Global Engine Starting...")
@@ -137,5 +141,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
