@@ -49,16 +49,11 @@ def run_sarima_forecast(history):
 
 def analyze_market(tickers, region_name):
     print(f"🌍 Analyzing {region_name} Market ({len(tickers)} tickers)...")
-    
     if not tickers: return
 
-    # 1. BATCH DOWNLOAD
     data = yf.download(tickers, period="1y", group_by='ticker', progress=False, threads=True)
-    
     candidates = []
 
-    # 2. SCREENING
-    print("   > Screening Stocks...")
     for ticker in tickers:
         try:
             if len(tickers) == 1: df = data
@@ -79,25 +74,28 @@ def analyze_market(tickers, region_name):
             except:
                 pe, pb, rev_growth = 50, 5, 0 
 
-            # --- BLEND SCORE LOGIC (STRICT) ---
-            
-            # 1. PE Score: Higher is better (Max 100 if PE is 0, 0 if PE is >50)
+            # --- DEBUGGING THE SCORE ---
+            # 1. PE Score (Max 100)
             score_pe = max(0, 100 - (pe * 2))
             
-            # 2. PB Score: Higher is better (Max 100 if PB is 0, 0 if PB is >15)
+            # 2. PB Score (Max 100)
             score_pb = max(0, 100 - (pb * 6)) 
             
-            # 3. Growth Score: STRICT CAP applied!
-            # Even if growth is 500%, score is capped at 100.
-            raw_growth = (rev_growth * 100) * 3
-            score_growth = min(100, max(0, raw_growth))
+            # 3. Growth Score (STRICT CAP)
+            # We calculate raw growth first, then FORCE it to be 0-100
+            raw_growth_points = (rev_growth * 100) * 3
+            score_growth = min(100, max(0, raw_growth_points)) 
             
             # Weighted Average
             final_score = (score_pe * 0.4) + (score_pb * 0.3) + (score_growth * 0.3)
             
-            # Final Safety Clamp (Just in case)
+            # Final Safety Clamp
             final_score = min(100, max(0, final_score))
             
+            # PRINT DEBUG INFO FOR MCDONALDS ONLY
+            if ticker == "MCD":
+                print(f"🍔 MCD DEBUG: PE={pe} (Score {score_pe}) | Growth={rev_growth} (Score {score_growth}) | FINAL={final_score}")
+
             if final_score > 30: 
                 candidates.append({
                     "Ticker": ticker,
@@ -108,32 +106,27 @@ def analyze_market(tickers, region_name):
                 })
         except: continue
 
-    # 3. RANKING
+    # ... (Rest of the function remains the same: Ranking & SARIMA) ...
+    # Be sure to include the Ranking and Saving logic here as before!
     df_candidates = pd.DataFrame(candidates)
-    if df_candidates.empty: return
-
-    top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(10)
-    
-    # 4. PREDICTION
-    print(f"   > Running AI Prediction on top {len(top_picks)}...")
-    predictions = []
-    for index, row in top_picks.iterrows():
-        pred_price = run_sarima_forecast(row['History'])
+    if not df_candidates.empty:
+        top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(10)
         
-        if pd.notna(pred_price):
-            # Calculate Upside with FULL PRECISION first
-            upside = ((pred_price - row['Close']) / row['Close']) * 100
-        else:
-            upside = 0.0
-            
-        predictions.append(round(upside, 2)) # Round ONLY at the very end
-    
-    top_picks['SARIMA_Forecast_5D'] = predictions
-    del top_picks['History']
-    
-    filename = f"{region_name}_rankings.csv"
-    top_picks.to_csv(filename, index=False)
-    print(f"✅ Saved {filename}")
+        predictions = []
+        for index, row in top_picks.iterrows():
+            pred_price = run_sarima_forecast(row['History'])
+            if pd.notna(pred_price):
+                upside = ((pred_price - row['Close']) / row['Close']) * 100
+            else:
+                upside = 0.0
+            predictions.append(round(upside, 2))
+        
+        top_picks['SARIMA_Forecast_5D'] = predictions
+        del top_picks['History']
+        
+        filename = f"{region_name}_rankings.csv"
+        top_picks.to_csv(filename, index=False)
+        print(f"✅ Saved {filename}")
 
 def main():
     print("🚀 IronGate Global Engine Starting...")
@@ -144,4 +137,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
