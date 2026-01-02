@@ -7,7 +7,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-# --- CONFIGURATION & BACKUPS ---
+# --- CONFIGURATION ---
 BACKUP_US = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "JPM", "V", "JNJ", "WMT", "PG", "MA", "UNH", "HD", "CVX", "MRK", "ABBV", "KO", "PEP", "BAC", "COST", "MCD", "DIS", "CSCO", "ACN", "NFLX", "LIN", "AMD"]
 BACKUP_UK = ["SHELL.L", "AZN.L", "HSBA.L", "ULVR.L", "BP.L", "DGE.L", "RIO.L", "BATS.L", "GLEN.L", "GSK.L", "REL.L", "LSEG.L", "VOD.L", "LLOY.L", "BARC.L", "NG.L", "PRU.L", "TSCO.L", "STAN.L", "RR.L"]
 BACKUP_INDIA = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "MARUTI.NS", "AXISBANK.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "ASIANPAINT.NS", "KOTAKBANK.NS", "TATASTEEL.NS", "M&M.NS", "ADANIENT.NS", "ADANIPORTS.NS", "NTPC.NS", "ONGC.NS"]
@@ -79,28 +79,21 @@ def analyze_market(tickers, region_name):
             except:
                 pe, pb, rev_growth = 50, 5, 0 
 
-            # --- BLEND SCORE LOGIC (PATCHED FOR NEGATIVE NUMBERS) ---
+            # --- BLEND SCORE LOGIC ---
+            if pe < 0: score_pe = 0
+            else: score_pe = max(0, 100 - (pe * 2))
             
-            # 1. PE Score (If PE is negative/loss, score is 0)
-            if pe < 0: 
-                score_pe = 0
-            else:
-                score_pe = max(0, 100 - (pe * 2))
+            if pb < 0: score_pb = 0
+            else: score_pb = max(0, 100 - (pb * 6)) 
             
-            # 2. PB Score (If PB is negative, score is 0 - FIX FOR MCD)
-            if pb < 0:
-                score_pb = 0
-            else:
-                score_pb = max(0, 100 - (pb * 6)) 
-            
-            # 3. Growth Score (Strict Cap 100)
             raw_growth = (rev_growth * 100) * 3
             score_growth = min(100, max(0, raw_growth)) 
             
             final_score = (score_pe * 0.4) + (score_pb * 0.3) + (score_growth * 0.3)
             final_score = min(100, max(0, final_score))
             
-            if final_score > 30: 
+            # ALLOW ALMOST EVERYTHING (Score > 5 filters out only absolute junk)
+            if final_score > 5: 
                 candidates.append({
                     "Ticker": ticker,
                     "Close": round(close_price, 2),
@@ -112,9 +105,12 @@ def analyze_market(tickers, region_name):
 
     df_candidates = pd.DataFrame(candidates)
     if not df_candidates.empty:
+        # NO LIMIT: Sort by score but keep EVERYONE
         top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False)
         
         predictions = []
+        print(f"   > Forecasting {len(top_picks)} tickers...")
+        
         for index, row in top_picks.iterrows():
             pred_price = run_sarima_forecast(row['History'])
             if pd.notna(pred_price):
@@ -126,10 +122,9 @@ def analyze_market(tickers, region_name):
         top_picks['SARIMA_Forecast_5D'] = predictions
         del top_picks['History']
         
-        # Saving as _Market_Data to keep things clean
         filename = f"{region_name}_Market_Data.csv"
         top_picks.to_csv(filename, index=False)
-        print(f"✅ Saved New Data: {filename}")
+        print(f"✅ Saved New Data: {filename} ({len(top_picks)} rows)")
 
 def main():
     analyze_market(get_us_tickers(), "US")
@@ -138,4 +133,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
