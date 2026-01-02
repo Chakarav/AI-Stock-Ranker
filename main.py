@@ -8,7 +8,6 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # --- CONFIGURATION & BACKUPS ---
-# Backup lists are ONLY used if live scraping fails
 BACKUP_US = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "JPM", "V", "JNJ", "WMT", "PG", "MA", "UNH", "HD", "CVX", "MRK", "ABBV", "KO", "PEP", "BAC", "COST", "MCD", "DIS", "CSCO", "ACN", "NFLX", "LIN", "AMD"]
 BACKUP_UK = ["SHELL.L", "AZN.L", "HSBA.L", "ULVR.L", "BP.L", "DGE.L", "RIO.L", "BATS.L", "GLEN.L", "GSK.L", "REL.L", "LSEG.L", "VOD.L", "LLOY.L", "BARC.L", "NG.L", "PRU.L", "TSCO.L", "STAN.L", "RR.L"]
 BACKUP_INDIA = ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "INFY.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "LICI.NS", "HINDUNILVR.NS", "LT.NS", "BAJFINANCE.NS", "MARUTI.NS", "AXISBANK.NS", "SUNPHARMA.NS", "TITAN.NS", "ULTRACEMCO.NS", "ASIANPAINT.NS", "KOTAKBANK.NS", "TATASTEEL.NS", "M&M.NS", "ADANIENT.NS", "ADANIPORTS.NS", "NTPC.NS", "ONGC.NS"]
@@ -35,21 +34,15 @@ def get_uk_tickers():
 
 def get_india_tickers():
     try:
-        # LIVE SCRAPING: Nifty 50 from Wikipedia
         url = "https://en.wikipedia.org/wiki/NIFTY_50"
         tables = pd.read_html(url)
-        # The ticker table is usually the 1st or 2nd one
         df = tables[1] 
         if 'Symbol' not in df.columns:
-            df = tables[2] # Fallback if table index shifts
-            
-        tickers = df['Symbol'].tolist()
-        return [f"{t}.NS" for t in tickers]
+            df = tables[2]
+        return [f"{t}.NS" for t in df['Symbol'].tolist()]
     except:
-        print("⚠️ India Scrape Failed. Using Backup List.")
         return BACKUP_INDIA
 
-# --- SARIMA PREDICTION ---
 def run_sarima_forecast(history):
     try:
         model = SARIMAX(history, order=(1, 1, 1)) 
@@ -86,17 +79,25 @@ def analyze_market(tickers, region_name):
             except:
                 pe, pb, rev_growth = 50, 5, 0 
 
-            # --- BLEND SCORE LOGIC (FIXED) ---
-            score_pe = max(0, 100 - (pe * 2))
-            score_pb = max(0, 100 - (pb * 6)) 
+            # --- BLEND SCORE LOGIC (PATCHED FOR NEGATIVE NUMBERS) ---
             
-            # STRICT CAP: Growth score can NEVER exceed 100
+            # 1. PE Score (If PE is negative/loss, score is 0)
+            if pe < 0: 
+                score_pe = 0
+            else:
+                score_pe = max(0, 100 - (pe * 2))
+            
+            # 2. PB Score (If PB is negative, score is 0 - FIX FOR MCD)
+            if pb < 0:
+                score_pb = 0
+            else:
+                score_pb = max(0, 100 - (pb * 6)) 
+            
+            # 3. Growth Score (Strict Cap 100)
             raw_growth = (rev_growth * 100) * 3
             score_growth = min(100, max(0, raw_growth)) 
             
             final_score = (score_pe * 0.4) + (score_pb * 0.3) + (score_growth * 0.3)
-            
-            # Final Safety Clamp (0-100)
             final_score = min(100, max(0, final_score))
             
             if final_score > 30: 
@@ -109,7 +110,6 @@ def analyze_market(tickers, region_name):
                 })
         except: continue
 
-    # RANKING & SAVING
     df_candidates = pd.DataFrame(candidates)
     if not df_candidates.empty:
         top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(10)
@@ -126,18 +126,15 @@ def analyze_market(tickers, region_name):
         top_picks['SARIMA_Forecast_5D'] = predictions
         del top_picks['History']
         
-        # --- NEW FILENAME TO BREAK ZOMBIE LOOP ---
+        # Saving as _Market_Data to keep things clean
         filename = f"{region_name}_Market_Data.csv"
-        
         top_picks.to_csv(filename, index=False)
         print(f"✅ Saved New Data: {filename}")
 
 def main():
-    print("🚀 IronGate Global Engine Starting...")
     analyze_market(get_us_tickers(), "US")
     analyze_market(get_india_tickers(), "IN")
     analyze_market(get_uk_tickers(), "UK")
-    print("🏁 Analysis Complete.")
 
 if __name__ == "__main__":
     main()
