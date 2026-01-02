@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-from github import Github
 
 st.set_page_config(page_title="IronGate Research", layout="wide")
 
@@ -22,20 +21,16 @@ tab1, tab2, tab3 = st.tabs(["🇺🇸 USA", "🇮🇳 INDIA", "🇬🇧 UK"])
 
 def render_tab(filename, currency):
     if not os.path.exists(filename):
-        st.warning("Data not available.")
+        st.warning(f"Waiting for data... ({filename})")
         return
 
     try:
         df = pd.read_csv(filename)
         
-        # ERROR PREVENTION: Check if new columns exist
         if 'Blend_Score' not in df.columns:
-            st.error("⚠️ Data Mismatch: This file is from the old version.")
-            st.info("The system is updating. Please wait for the next scheduled run.")
-            st.dataframe(df) # Show old data anyway
+            st.error("⚠️ Data Mismatch: Old file detected.")
             return
 
-        # Show New Metrics
         top = df.iloc[0]
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Top Pick", top['Ticker'])
@@ -50,6 +45,7 @@ def render_tab(filename, currency):
     except Exception as e:
         st.error(f"Error loading data: {e}")
 
-with tab1: render_tab("US_rankings.csv", "$")
-with tab2: render_tab("IN_rankings.csv", "₹")
-with tab3: render_tab("UK_rankings.csv", "£")
+# --- UPDATED FILENAMES ---
+with tab1: render_tab("US_Market_Data.csv", "$")
+with tab2: render_tab("IN_Market_Data.csv", "₹")
+with tab3: render_tab("UK_Market_Data.csv", "£")
