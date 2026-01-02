@@ -28,19 +28,17 @@ def send_email():
     email_body = ""
     has_data = False
 
+    # UPDATED FILENAMES HERE
     for region in ["US", "IN", "UK"]:
-        filename = f"{region}_rankings.csv"
+        filename = f"{region}_Market_Data.csv" 
+        
         if os.path.exists(filename):
             try:
                 df = pd.read_csv(filename)
                 if df.empty: continue
                 
-                # Check required columns exist, if not, skip to prevent error
-                if 'Blend_Score' not in df.columns: continue
-
                 df = df[['Ticker', 'Close', 'Blend_Score', 'SARIMA_Forecast_5D', 'PE_Ratio']].head(5)
                 
-                # Create HTML Table
                 table_html = df.to_html(index=False, border=0)
                 table_html = table_html.replace('class="dataframe"', 'style="width:100%; border-collapse:collapse; font-family:monospace; font-size:12px; margin-bottom:20px;"')
                 table_html = table_html.replace('<th>', '<th style="text-align:right; background:#eee; padding:5px; border-bottom:2px solid black;">')
