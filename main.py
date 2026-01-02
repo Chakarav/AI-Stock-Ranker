@@ -112,7 +112,7 @@ def analyze_market(tickers, region_name):
 
     df_candidates = pd.DataFrame(candidates)
     if not df_candidates.empty:
-        top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False).head(10)
+        top_picks = df_candidates.sort_values(by="Blend_Score", ascending=False)
         
         predictions = []
         for index, row in top_picks.iterrows():
@@ -138,3 +138,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
