@@ -17,7 +17,7 @@ st.title("IRONGATE | EQUITY MONITOR")
 
 # --- SIDEBAR SUBSCRIPTION SYSTEM ---
 with st.sidebar:
-    st.header("📬 Weekly Brief")
+    st.header(" Weekly Brief")
     with st.form("sub_form", clear_on_submit=True):
         email = st.text_input("Enter Email Address")
         submitted = st.form_submit_button("Subscribe")
@@ -116,3 +116,4 @@ def render_tab(filename, currency):
 with tab1: render_tab("US_Market_Data.csv", "$")
 with tab2: render_tab("IN_Market_Data.csv", "₹")
 with tab3: render_tab("UK_Market_Data.csv", "£")
+
