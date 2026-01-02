@@ -14,7 +14,7 @@ st.markdown("""
 
 st.title("IRONGATE | EQUITY MONITOR")
 
-# --- SIDEBAR SUBSCRIPTION (DEBUG MODE) ---
+# --- SIDEBAR SUBSCRIPTION (FINAL FIX) ---
 with st.sidebar:
     st.header("📬 Weekly Brief")
     with st.form("sub_form", clear_on_submit=True):
@@ -23,47 +23,61 @@ with st.sidebar:
         
         if submitted and "@" in email:
             try:
-                # 1. READ TOKEN FROM SECRETS
+                # 1. READ TOKEN
                 if "GITHUB_TOKEN" not in st.secrets:
-                    st.error("❌ ERROR: 'GITHUB_TOKEN' not found in Secrets!")
+                    st.error("❌ Token missing in Secrets.")
                     st.stop()
                 
                 token = st.secrets["GITHUB_TOKEN"]
-                
-                # 2. CONNECT TO GITHUB
                 g = Github(token)
-                user = g.get_user()
                 
-                # 3. CONNECT TO REPO (Replace 'AI-Stock-Ranker' if your repo name is different)
-                repo_name = "AI-Stock-Ranker"
+                # 2. CONNECT TO REPO (Hardcoded to match your screenshot)
+                target_repo = "Chakarav/AI-Stock-Ranker" 
                 try:
-                    repo = user.get_repo(repo_name)
+                    repo = g.get_repo(target_repo)
                 except:
-                    st.error(f"❌ ERROR: Could not find repo '{repo_name}'. Check spelling!")
+                    st.error(f"❌ Error: Could not find '{target_repo}'.")
                     st.stop()
                 
-                # 4. SAVE EMAIL
+                # 3. SAVE EMAIL (THE SHA FIX)
                 filename = "subscribers.csv"
                 try:
+                    # A. TRY TO GET EXISTING FILE
                     contents = repo.get_contents(filename)
+                    
+                    # Read current CSV content
                     existing_data = pd.read_csv(pd.compat.StringIO(contents.decoded_content.decode()))
                     
                     if email not in existing_data['email'].values:
+                        # Append new email
                         new_row = pd.DataFrame({"email": [email]})
                         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
-                        repo.update_file(contents.path, f"Add subscriber {email}", updated_df.to_csv(index=False), contents.sha)
-                        st.success(f"✅ Subscribed! (Saved to {filename})")
+                        
+                        # --- THE FIX IS HERE: Explicitly passing contents.sha ---
+                        repo.update_file(
+                            path=contents.path, 
+                            message=f"Add subscriber {email}", 
+                            content=updated_df.to_csv(index=False), 
+                            sha=contents.sha  # <--- THIS IS THE KEY!
+                        )
+                        st.success(f"✅ Subscribed!")
                     else:
                         st.info("You are already subscribed.")
                 
-                except:
-                    # File doesn't exist yet, create it
-                    new_df = pd.DataFrame({"email": [email]})
-                    repo.create_file(filename, "Create subscribers file", new_df.to_csv(index=False))
-                    st.success(f"✅ Subscribed! (Created {filename})")
+                except Exception as e:
+                    # B. IF FILE DOES NOT EXIST, CREATE IT (No SHA needed for creation)
+                    if "404" in str(e):
+                        new_df = pd.DataFrame({"email": [email]})
+                        repo.create_file(
+                            path=filename, 
+                            message="Create subscribers file", 
+                            content=new_df.to_csv(index=False)
+                        )
+                        st.success(f"✅ Subscribed! (Created Database)")
+                    else:
+                        st.error(f"❌ Error: {e}")
 
             except Exception as e:
-                # THIS WILL SHOW US THE REAL ERROR
                 st.error(f"❌ CRITICAL ERROR: {str(e)}")
 
 # --- DATA TABS ---
