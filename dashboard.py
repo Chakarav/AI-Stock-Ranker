@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from github import Github
 
-# --- PAGE SETUP ---
+# --- PAGE CONFIG ---
 st.set_page_config(page_title="IronGate Research", layout="wide")
 st.markdown("""
     <style>
@@ -12,66 +12,61 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- TITLE (REMOVED STRATEGY LINE) ---
 st.title("IRONGATE | EQUITY MONITOR")
 
-# --- SIDEBAR SUBSCRIPTION SYSTEM ---
+# --- SIDEBAR SUBSCRIPTION (DEBUG MODE) ---
 with st.sidebar:
-    st.header(" Weekly Brief")
+    st.header("📬 Weekly Brief")
     with st.form("sub_form", clear_on_submit=True):
         email = st.text_input("Enter Email Address")
         submitted = st.form_submit_button("Subscribe")
         
         if submitted and "@" in email:
-            # TRY TO SAVE TO GITHUB (PERSISTENT)
             try:
-                # 1. Connect to Repo
-                token = st.secrets["GITHUB_TOKEN"] # Must be in Secrets
-                g = Github(token)
-                repo = g.get_user().get_repo("AI-Stock-Ranker") # YOUR REPO NAME HERE
+                # 1. READ TOKEN FROM SECRETS
+                if "GITHUB_TOKEN" not in st.secrets:
+                    st.error("❌ ERROR: 'GITHUB_TOKEN' not found in Secrets!")
+                    st.stop()
                 
-                # 2. Get existing file
+                token = st.secrets["GITHUB_TOKEN"]
+                
+                # 2. CONNECT TO GITHUB
+                g = Github(token)
+                user = g.get_user()
+                
+                # 3. CONNECT TO REPO (Replace 'AI-Stock-Ranker' if your repo name is different)
+                repo_name = "AI-Stock-Ranker"
                 try:
-                    contents = repo.get_contents("subscribers.csv")
+                    repo = user.get_repo(repo_name)
+                except:
+                    st.error(f"❌ ERROR: Could not find repo '{repo_name}'. Check spelling!")
+                    st.stop()
+                
+                # 4. SAVE EMAIL
+                filename = "subscribers.csv"
+                try:
+                    contents = repo.get_contents(filename)
                     existing_data = pd.read_csv(pd.compat.StringIO(contents.decoded_content.decode()))
                     
                     if email not in existing_data['email'].values:
-                        # Append new email
                         new_row = pd.DataFrame({"email": [email]})
                         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
-                        
-                        # Update file on GitHub
                         repo.update_file(contents.path, f"Add subscriber {email}", updated_df.to_csv(index=False), contents.sha)
-                        st.success("✅ Subscribed successfully!")
+                        st.success(f"✅ Subscribed! (Saved to {filename})")
                     else:
                         st.info("You are already subscribed.")
                 
                 except:
-                    # Create file if it doesn't exist
+                    # File doesn't exist yet, create it
                     new_df = pd.DataFrame({"email": [email]})
-                    repo.create_file("subscribers.csv", "Create subscribers file", new_df.to_csv(index=False))
-                    st.success("✅ Subscribed successfully!")
+                    repo.create_file(filename, "Create subscribers file", new_df.to_csv(index=False))
+                    st.success(f"✅ Subscribed! (Created {filename})")
 
             except Exception as e:
-                # FALLBACK: LOCAL SAVE (If no Github token)
-                # Note: This resets on app reboot, strictly for testing
-                try:
-                    if os.path.exists("subscribers.csv"):
-                        df = pd.read_csv("subscribers.csv")
-                    else:
-                        df = pd.DataFrame(columns=["email"])
-                    
-                    if email not in df["email"].values:
-                        new_row = pd.DataFrame({"email": [email]})
-                        df = pd.concat([df, new_row], ignore_index=True)
-                        df.to_csv("subscribers.csv", index=False)
-                        st.success("✅ Added (Local Only)")
-                    else:
-                        st.info("Already in list")
-                except:
-                    st.error("Could not save email.")
+                # THIS WILL SHOW US THE REAL ERROR
+                st.error(f"❌ CRITICAL ERROR: {str(e)}")
 
-# --- MAIN DASHBOARD LOGIC ---
+# --- DATA TABS ---
 if st.button("SYNC DATA"):
     st.rerun()
 
@@ -84,13 +79,10 @@ def render_tab(filename, currency):
 
     try:
         df = pd.read_csv(filename)
-        
-        # Check for data match
         if 'Blend_Score' not in df.columns:
             st.error("⚠️ Data Mismatch: Old file detected.")
             return
 
-        # Top Pick Metrics
         top = df.iloc[0]
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Top Pick", top['Ticker'])
@@ -98,23 +90,12 @@ def render_tab(filename, currency):
         c3.metric("Proj. Upside", f"{top['SARIMA_Forecast_5D']}%")
         c4.metric("Valuation", f"{top['PE_Ratio']} P/E")
         
-        # FULL TABLE WITH SORTING
-        # use_container_width=True makes it pretty
-        # Standard Streamlit dataframes allow clicking headers to sort!
-        st.dataframe(
-            df.style.background_gradient(subset=['Blend_Score'], cmap='Greens'),
-            use_container_width=True, 
-            hide_index=True,
-            height=600 # Makes the table taller to see more stocks
-        )
+        st.dataframe(df.style.background_gradient(subset=['Blend_Score'], cmap='Greens'), use_container_width=True, hide_index=True, height=600)
         st.caption(f"Showing {len(df)} stocks based on available data.")
 
     except Exception as e:
         st.error(f"Error loading data: {e}")
 
-# Load the NEW filenames
 with tab1: render_tab("US_Market_Data.csv", "$")
 with tab2: render_tab("IN_Market_Data.csv", "₹")
 with tab3: render_tab("UK_Market_Data.csv", "£")
-
-
