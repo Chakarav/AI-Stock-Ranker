@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import io  # <--- NEW IMPORT TO FIX THE CRASH
 from github import Github
 
 # --- PAGE CONFIG ---
@@ -14,7 +15,7 @@ st.markdown("""
 
 st.title("IRONGATE | EQUITY MONITOR")
 
-# --- SIDEBAR SUBSCRIPTION (FINAL FIX) ---
+# --- SIDEBAR SUBSCRIPTION (FINAL WORKING VERSION) ---
 with st.sidebar:
     st.header("📬 Weekly Brief")
     with st.form("sub_form", clear_on_submit=True):
@@ -31,7 +32,7 @@ with st.sidebar:
                 token = st.secrets["GITHUB_TOKEN"]
                 g = Github(token)
                 
-                # 2. CONNECT TO REPO (Hardcoded to match your screenshot)
+                # 2. CONNECT TO REPO
                 target_repo = "Chakarav/AI-Stock-Ranker" 
                 try:
                     repo = g.get_repo(target_repo)
@@ -39,33 +40,35 @@ with st.sidebar:
                     st.error(f"❌ Error: Could not find '{target_repo}'.")
                     st.stop()
                 
-                # 3. SAVE EMAIL (THE SHA FIX)
+                # 3. SAVE EMAIL
                 filename = "subscribers.csv"
                 try:
                     # A. TRY TO GET EXISTING FILE
                     contents = repo.get_contents(filename)
                     
-                    # Read current CSV content
-                    existing_data = pd.read_csv(pd.compat.StringIO(contents.decoded_content.decode()))
+                    # --- THE FIX FOR "pandas.compat" ERROR ---
+                    # We use the standard 'io' library instead of the old pandas one
+                    csv_content = contents.decoded_content.decode()
+                    existing_data = pd.read_csv(io.StringIO(csv_content))
                     
                     if email not in existing_data['email'].values:
-                        # Append new email
                         new_row = pd.DataFrame({"email": [email]})
                         updated_df = pd.concat([existing_data, new_row], ignore_index=True)
                         
-                        # --- THE FIX IS HERE: Explicitly passing contents.sha ---
+                        # Update with SHA (Fixes the 422 Error)
                         repo.update_file(
                             path=contents.path, 
                             message=f"Add subscriber {email}", 
                             content=updated_df.to_csv(index=False), 
-                            sha=contents.sha  # <--- THIS IS THE KEY!
+                            sha=contents.sha 
                         )
                         st.success(f"✅ Subscribed!")
                     else:
                         st.info("You are already subscribed.")
                 
                 except Exception as e:
-                    # B. IF FILE DOES NOT EXIST, CREATE IT (No SHA needed for creation)
+                    # B. IF FILE DOES NOT EXIST, CREATE IT
+                    # If the error is simply "Not Found" (404), create the file
                     if "404" in str(e):
                         new_df = pd.DataFrame({"email": [email]})
                         repo.create_file(
@@ -75,6 +78,7 @@ with st.sidebar:
                         )
                         st.success(f"✅ Subscribed! (Created Database)")
                     else:
+                        # Real crash
                         st.error(f"❌ Error: {e}")
 
             except Exception as e:
