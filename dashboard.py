@@ -26,7 +26,7 @@ with st.sidebar:
             # TRY TO SAVE TO GITHUB (PERSISTENT)
             try:
                 # 1. Connect to Repo
-                token = os.environ.get("GITHUB_TOKEN") # Must be in Secrets
+                token = st.secrets["GITHUB_TOKEN"] # Must be in Secrets
                 g = Github(token)
                 repo = g.get_user().get_repo("AI-Stock-Ranker") # YOUR REPO NAME HERE
                 
@@ -116,4 +116,5 @@ def render_tab(filename, currency):
 with tab1: render_tab("US_Market_Data.csv", "$")
 with tab2: render_tab("IN_Market_Data.csv", "₹")
 with tab3: render_tab("UK_Market_Data.csv", "£")
+
 
