@@ -7,7 +7,7 @@ from github import Github
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="IGT | TERMINAL", layout="wide")
 
-# --- MODERN HEDGE FUND STYLING ---
+# --- MODERN HEDGE FUND STYLING (DARK & CYAN) ---
 st.markdown("""
     <style>
         /* IMPORT MODERN FONT */
@@ -43,9 +43,9 @@ st.markdown("""
             letter-spacing: 1px;
         }
 
-        /* METRIC CARDS - MINIMALIST */
+        /* METRIC CARDS */
         [data-testid="stMetricValue"] {
-            color: #00d4ff !important; /* CYAN ACCENT */
+            color: #00d4ff !important;
             font-size: 1.8rem !important;
             font-weight: 600;
         }
@@ -56,9 +56,9 @@ st.markdown("""
             text-transform: uppercase;
         }
 
-        /* TABS - WIDER SPACING & CLEAN LOOK */
+        /* TABS */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 20px; /* SPACE BETWEEN TABS */
+            gap: 20px;
             background-color: transparent;
             padding-bottom: 10px;
             border-bottom: 1px solid #333;
@@ -76,16 +76,16 @@ st.markdown("""
         }
         .stTabs [aria-selected="true"] {
             background-color: transparent !important;
-            color: #00d4ff !important; /* CYAN HIGHLIGHT */
+            color: #00d4ff !important;
             border-bottom: 3px solid #00d4ff;
         }
 
-        /* DATAFRAMES - CLEAN LINES */
+        /* DATAFRAMES */
         .stDataFrame {
             border: 1px solid #222;
         }
         
-        /* BUTTONS - PREMIUM GHOST STYLE */
+        /* BUTTONS */
         .stButton button {
             background-color: transparent;
             color: #00d4ff;
@@ -103,13 +103,13 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
         }
 
-        /* SIDEBAR - DARK & SUBTLE */
+        /* SIDEBAR */
         [data-testid="stSidebar"] {
             background-color: #0b0d10;
             border-right: 1px solid #222;
         }
         
-        /* TEXT INPUTS */
+        /* INPUT FIELDS */
         .stTextInput input {
             background-color: #161b22;
             color: white;
@@ -135,7 +135,6 @@ with st.sidebar:
         
         if submitted and "@" in email:
             try:
-                # 1. AUTHENTICATE
                 if "GITHUB_TOKEN" not in st.secrets:
                     st.error("SYSTEM ERROR: MISSING TOKEN")
                     st.stop()
@@ -143,7 +142,6 @@ with st.sidebar:
                 token = st.secrets["GITHUB_TOKEN"]
                 g = Github(token)
                 
-                # 2. CONNECT TO REPO
                 target_repo = "Chakarav/AI-Stock-Ranker" 
                 try:
                     repo = g.get_repo(target_repo)
@@ -151,7 +149,6 @@ with st.sidebar:
                     st.error(f"ERROR: REPO '{target_repo}' NOT FOUND")
                     st.stop()
                 
-                # 3. UPDATE DATABASE
                 filename = "subscribers.csv"
                 try:
                     contents = repo.get_contents(filename)
@@ -191,7 +188,7 @@ with st.sidebar:
 if st.button("SYNC LIVE DATA"):
     st.rerun()
 
-st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("<br>", unsafe_allow_html=True) 
 
 # --- MARKET TABS ---
 tab1, tab2, tab3 = st.tabs(["US MARKETS", "INDIA MARKETS", "UK MARKETS"])
@@ -219,9 +216,10 @@ def render_terminal_tab(filename, currency_symbol):
         
         st.markdown("### MARKET SCANNER RESULTS")
         
-        # DATAFRAME CONFIG (DARK THEME TABLE)
+        # DATAFRAME CONFIG (DARK BLUE/GREEN THEME)
+        # Using 'GnBu' (Green-Blue) for a professional, cold financial look
         st.dataframe(
-            df.style.background_gradient(subset=['Blend_Score'], cmap='mako', vmin=0, vmax=100),
+            df.style.background_gradient(subset=['Blend_Score'], cmap='GnBu', vmin=0, vmax=100),
             use_container_width=True, 
             hide_index=True,
             height=600
