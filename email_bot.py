@@ -61,7 +61,7 @@ def send_email():
     <html>
     <body style="font-family: Arial, sans-serif; color: #333;">
         <h2>IRONGATE <span style="color:#666">GLOBAL</span></h2>
-        <p style="font-size:12px; color:#555;">STRATEGY: VALUE/GROWTH BLEND + AI FORECAST</p>
+        <p style="font-size:12px; color:#555;">STRATEGY: VALUE/GROWTH STOCK FORECAST</p>
         <hr>
         {email_body}
         <br>
@@ -79,3 +79,4 @@ def send_email():
 
 if __name__ == "__main__":
     send_email()
+
