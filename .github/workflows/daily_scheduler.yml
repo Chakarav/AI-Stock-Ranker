@@ -34,11 +34,13 @@ jobs:
           EMAIL_PASSWORD: ${{ secrets.APP_PASSWORD }} 
         run: python email_bot.py
 
-      - name: Commit & Push New Data
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: "Daily Data Update"
-          file_pattern: "*.csv"
+      - name: Sync with remote
+        run: git pull --rebase --autostash origin main
 
+      - name: Commit & Push New Data
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Daily Data Update
+          file_pattern: '*.csv'
 
 
